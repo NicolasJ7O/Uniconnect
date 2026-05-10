@@ -59,6 +59,7 @@ let isDatabaseConnected = false;
 app.get('/health', (_req, res) => {
   res.json({
     status: isDatabaseConnected ? 'ok' : 'degraded',
+    version: '1.0.0',
     service: 'uniconnect-backend',
     database: isDatabaseConnected ? 'up' : 'down',
     timestamp: new Date().toISOString(),

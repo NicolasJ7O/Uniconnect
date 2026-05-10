@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: uniconnect-db
+    restart: always
+    environment:
+      POSTGRES_USER: uniconnect_user
+      POSTGRES_PASSWORD: uniconnect_password
+      POSTGRES_DB: uniconnect_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uniconnect_user -d uniconnect_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      # Usar target builder en desarrollo, si lo deseas, o simplemente correr con una imagen cruda
+      # Como queremos un entorno de DEV usamos imagen pura y montamos el volumen
+    image: node:20-alpine
+    container_name: uniconnect-backend-dev
+    depends_on:
+      db:
+        condition: service_healthy
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    # El package.json ya tiene un comando watch: "tsx watch src/index.ts" que actúa como nodemon haciendo Hot Reload
+    command: /bin/sh -c "npm install && npx prisma migrate dev && npm run dev"
+
+  frontend:
+    image: node:20-alpine
+    container_name: uniconnect-frontend-dev
+    working_dir: /app
+    volumes:
+      - ./front:/app
+      - /app/node_modules
+      - /app/.expo
+    env_file:
+      - .env
+    ports:
+      - "8081:8081"
+    environment:
+      - EXPO_NO_TELEMETRY=1
+    command: /bin/sh -c "npm install && npm run web"
+
+volumes:
+  db-data:
+    name: db-data

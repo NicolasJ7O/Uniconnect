@@ -1,4 +1,3 @@
-import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
@@ -8,52 +7,40 @@ import apiClient from '@/lib/api-client';
 
 WebBrowser.maybeCompleteAuthSession();
 
-//const ALLOWED_DOMAIN = 'ucaldas.edu.co';
-const ALLOWED_DOMAIN = 'gmail.com';
+// Restringir forzosamente a cuentas institucionales de Ucaldas como se solicitó
+const ALLOWED_DOMAIN = 'ucaldas.edu.co';
 
 export function useGoogleAuth() {
     const [user, setUser] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-    // Usar los nombres antiguos o nuevos del .env
-    const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS || process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-    const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID || process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-    const webClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    // Utilizamos las credenciales de Auth0 inyectadas en .env
+    const auth0Domain = process.env.EXPO_PUBLIC_AUTH0_DOMAIN!;
+    const clientId = process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID!;
 
-    const googleIosScheme = iosClientId
-        ? `com.googleusercontent.apps.${iosClientId.replace('.apps.googleusercontent.com', '')}`
-        : null;
-
-    const redirectUri = Platform.select({
-        ios: googleIosScheme ? `${googleIosScheme}:/oauthredirect` : undefined,
-        // TRUCO: Usar el listado y esquema de iOS también en Android
-        android: googleIosScheme ? `${googleIosScheme}:/oauthredirect` : undefined,
-        default: AuthSession.makeRedirectUri({
-            scheme: 'com.ucaldas.estudiantes',
-            path: 'oauthredirect',
-        }),
+    const redirectUri = AuthSession.makeRedirectUri({
+        scheme: 'com.ucaldas.estudiantes',
+        path: 'oauthredirect',
     });
 
-    const [request, response, promptAsync] = Google.useAuthRequest({
-        webClientId,
-        // TRUCO: Decirle a Google que Android es iOS para evitar el bloqueo de Custom Scheme
-        androidClientId: Platform.OS === 'android' ? iosClientId : androidClientId,
-        iosClientId,
-        redirectUri,
-        // Forzar dominio institucional 
-        extraParams: {
-            hd: ALLOWED_DOMAIN, // hd = hosted domain 
+    const discovery = AuthSession.useAutoDiscovery(`https://${auth0Domain}`);
+
+    // Configurando la petición a Auth0
+    const [request, response, promptAsync] = AuthSession.useAuthRequest(
+        {
+            clientId,
+            redirectUri,
+            scopes: ['openid', 'profile', 'email'],
         },
-        scopes: ['openid', 'profile', 'email'],
-    });
+        discovery
+    );
 
     const signIn = () => {
-        if (!iosClientId || !androidClientId || !webClientId) {
-            setError('Faltan client IDs de Google en .env');
+        if (!auth0Domain || !clientId) {
+            setError('Faltan credenciales de Auth0 en .env');
             return;
         }
-        console.log('OAuth redirectUri:', redirectUri);
         setError(null);
         promptAsync();
     };
@@ -64,7 +51,7 @@ export function useGoogleAuth() {
         }
         if (response?.type === 'error') {
             const oauthError = (response?.params as any)?.error_description || (response?.params as any)?.error || 'Solicitud OAuth inválida';
-            setError(`Google OAuth: ${oauthError}`);
+            setError(`Auth0 OAuth: ${oauthError}`);
         }
         if (response?.type === 'dismiss' || response?.type === 'cancel') {
             setError('Inicio de sesión cancelado.');
@@ -75,29 +62,35 @@ export function useGoogleAuth() {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch('https://www.googleapis.com/userinfo/v2/me', {
+            // Extraer email y nombre de la bóveda de Auth0
+            const res = await fetch(`https://${auth0Domain}/userinfo`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
-            /*
-            // Validar que sea cuenta @ucaldas.edu.co 
+            
+            // Validar restricción obligatoria @ucaldas.edu.co
             if (!data.email?.endsWith(`@${ALLOWED_DOMAIN}`)) {
-                setError('Solo se permiten cuentas @ucaldas.edu.co');
+                setError(`Solo se permiten cuentas institucionales @${ALLOWED_DOMAIN}`);
+                setLoading(false);
                 return;
-            }*/
+            }
 
-            // Sincronizar el token con el backend para guardar la sesión en la app
+            // Sincronizar el token con el backend usando /auth/simple para salvaguardar la arquitectura actual 
+            // e instanciar al usuario mediante Auth0
             try {
-                const backendRes = await apiClient.post('/auth/google/web', { accessToken: token });
+                const backendRes = await apiClient.post('/auth/simple', { 
+                    email: data.email,
+                    name: data.name || data.nickname || data.email
+                });
+                
                 const { accessToken: localToken, refreshToken, user: backendUser } = backendRes.data;
-
                 await saveSession({
                     user: {
                         id: backendUser.id,
                         name: backendUser.name,
                         email: backendUser.email,
                         role: backendUser.role || 'student',
-                        avatarUrl: backendUser.avatarUrl || null,
+                        avatarUrl: backendUser.avatarUrl || data.picture || null,
                     },
                     accessToken: localToken,
                     refreshToken,
@@ -105,11 +98,11 @@ export function useGoogleAuth() {
 
                 setUser(backendUser);
             } catch (backendError: any) {
-                const msg = backendError?.response?.data?.message || 'Error al autenticar con el servidor de Uniconnect';
+                const msg = backendError?.response?.data?.message || 'Error al conectar la sesión con Uniconnect';
                 setError(msg);
             }
         } catch (e) {
-            setError('Error al obtener información del usuario');
+            setError('Error al obtener perfil institucional desde Auth0');
         } finally {
             setLoading(false);
         }

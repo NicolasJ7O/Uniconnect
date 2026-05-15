@@ -1,14 +1,10 @@
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
 import { saveSession } from '@/lib/session';
-import apiClient from '@/lib/api-client';
+import { signInWithAuth0 } from '@/lib/auth-api';
 
 WebBrowser.maybeCompleteAuthSession();
-
-// Restringir forzosamente a cuentas institucionales de Ucaldas como se solicitó
-const ALLOWED_DOMAIN = 'ucaldas.edu.co';
 
 export function useGoogleAuth() {
     const [user, setUser] = useState<any>(null);
@@ -47,7 +43,33 @@ export function useGoogleAuth() {
 
     useEffect(() => {
         if (response?.type === 'success') {
-            fetchUserInfo(response.authentication!.accessToken);
+            const { code, access_token } = response.params;
+            
+            if (response.authentication?.accessToken) {
+                syncWithBackend(response.authentication.accessToken);
+            } else if (access_token) {
+                syncWithBackend(access_token);
+            } else if (code && discovery) {
+                // Intercambiar el código de autorización por el token usando PKCE
+                AuthSession.exchangeCodeAsync(
+                    {
+                        clientId,
+                        code,
+                        redirectUri,
+                        extraParams: request?.codeVerifier ? { code_verifier: request.codeVerifier } : undefined,
+                    },
+                    discovery
+                )
+                .then((auth) => {
+                    syncWithBackend(auth.accessToken);
+                })
+                .catch((err) => {
+                    console.error("Error exchanging code", err);
+                    setError('Error al intercambiar el código de acceso.');
+                });
+            } else {
+                setError('No se recibió un token de acceso válido.');
+            }
         }
         if (response?.type === 'error') {
             const oauthError = (response?.params as any)?.error_description || (response?.params as any)?.error || 'Solicitud OAuth inválida';
@@ -56,53 +78,27 @@ export function useGoogleAuth() {
         if (response?.type === 'dismiss' || response?.type === 'cancel') {
             setError('Inicio de sesión cancelado.');
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [response]);
 
-    const fetchUserInfo = async (token: string) => {
+    const syncWithBackend = async (accessToken: string) => {
         setLoading(true);
         setError(null);
         try {
-            // Extraer email y nombre de la bóveda de Auth0
-            const res = await fetch(`https://${auth0Domain}/userinfo`, {
-                headers: { Authorization: `Bearer ${token}` },
+            // Validate the token exclusively and securely through the Backend 
+            // avoiding mock/testing /auth/simple endpoint.
+            const sessionData = await signInWithAuth0(accessToken);
+
+            await saveSession({
+                user: sessionData.user,
+                accessToken: sessionData.accessToken,
+                refreshToken: sessionData.refreshToken,
             });
-            const data = await res.json();
-            
-            // Validar restricción obligatoria @ucaldas.edu.co
-            if (!data.email?.endsWith(`@${ALLOWED_DOMAIN}`)) {
-                setError(`Solo se permiten cuentas institucionales @${ALLOWED_DOMAIN}`);
-                setLoading(false);
-                return;
-            }
 
-            // Sincronizar el token con el backend usando /auth/simple para salvaguardar la arquitectura actual 
-            // e instanciar al usuario mediante Auth0
-            try {
-                const backendRes = await apiClient.post('/auth/simple', { 
-                    email: data.email,
-                    name: data.name || data.nickname || data.email
-                });
-                
-                const { accessToken: localToken, refreshToken, user: backendUser } = backendRes.data;
-                await saveSession({
-                    user: {
-                        id: backendUser.id,
-                        name: backendUser.name,
-                        email: backendUser.email,
-                        role: backendUser.role || 'student',
-                        avatarUrl: backendUser.avatarUrl || data.picture || null,
-                    },
-                    accessToken: localToken,
-                    refreshToken,
-                });
-
-                setUser(backendUser);
-            } catch (backendError: any) {
-                const msg = backendError?.response?.data?.message || 'Error al conectar la sesión con Uniconnect';
-                setError(msg);
-            }
-        } catch (e) {
-            setError('Error al obtener perfil institucional desde Auth0');
+            setUser(sessionData.user);
+        } catch (backendError: any) {
+            const msg = backendError?.response?.data?.message || 'Error de Autenticación Uniconnect';
+            setError(msg);
         } finally {
             setLoading(false);
         }

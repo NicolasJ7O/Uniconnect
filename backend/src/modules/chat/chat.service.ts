@@ -4,7 +4,7 @@ import { AppError } from '../../errors/app-error.js';
 import { decorateMessage } from './decorators/message.decorator.js';
 
 export class ChatService {
-  async getGroupMessages(groupId: string, userId: string) {
+  async getGroupMessages(groupId: string, userId: string, page: number = 1, limit: number = 20) {
     // Validate membership
     const group = await prisma.studyGroup.findUnique({
       where: { id: groupId },
@@ -12,19 +12,32 @@ export class ChatService {
     });
 
     if (!group) throw new AppError(404, 'Grupo no encontrado');
-
     const isMember = group.members.some((m) => m.id === userId) || group.ownerId === userId;
     if (!isMember) throw new AppError(403, 'No tienes acceso a este grupo');
 
-    return prisma.message.findMany({
+    const totalCount = await prisma.message.count({
       where: { groupId, isPrivate: false },
-      orderBy: { createdAt: 'asc' },
+    });
+
+    const messages = await prisma.message.findMany({
+      where: { groupId, isPrivate: false },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: (page - 1) * limit,
       include: {
         sender: {
           select: { id: true, name: true, avatarUrl: true },
         },
       },
     });
+
+    return {
+      messages: messages.reverse(),
+      total: totalCount,
+      page,
+      limit,
+      totalPages: Math.ceil(totalCount / limit)
+    };
   }
 
   async sendGroupMessage(data: {
@@ -105,8 +118,8 @@ export class ChatService {
     return message;
   }
 
-  async getPrivateMessages(userId: string, otherUserId: string) {
-    return prisma.message.findMany({
+  async getPrivateMessages(userId: string, otherUserId: string, page: number = 1, limit: number = 20) {
+    const totalCount = await prisma.message.count({
       where: {
         isPrivate: true,
         OR: [
@@ -114,11 +127,31 @@ export class ChatService {
           { senderId: otherUserId, receiverId: userId },
         ],
       },
-      orderBy: { createdAt: 'asc' },
+    });
+
+    const messages = await prisma.message.findMany({
+      where: {
+        isPrivate: true,
+        OR: [
+          { senderId: userId, receiverId: otherUserId },
+          { senderId: otherUserId, receiverId: userId },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: (page - 1) * limit,
       include: {
         sender: { select: { id: true, name: true, avatarUrl: true } },
       },
     });
+
+    return {
+      messages: messages.reverse(),
+      total: totalCount,
+      page,
+      limit,
+      totalPages: Math.ceil(totalCount / limit)
+    };
   }
 
   async sendPrivateMessage(data: {
@@ -130,8 +163,14 @@ export class ChatService {
     fileType?: string;
   }) {
     const { senderId, receiverId, content, fileUrl, fileName, fileType } = data;
+    
+    // Recupera la otra persona para poder decorarle la mención si existe
+    const receiver = await prisma.user.findUnique({
+      where: { id: receiverId }
+    });
 
-    const processedContent = decorateMessage(content);
+    const memberNames = receiver && receiver.name ? [receiver.name] : [];
+    const processedContent = decorateMessage(content, { memberNames });
 
     const message = await prisma.message.create({
       data: {
@@ -168,6 +207,43 @@ export class ChatService {
     });
 
     return message;
+  }
+
+  async getConversations(userId: string) {
+    const messages = await prisma.message.findMany({
+      where: {
+        isPrivate: true,
+        OR: [
+          { senderId: userId },
+          { receiverId: userId },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        sender: { select: { id: true, name: true, avatarUrl: true } },
+        receiver: { select: { id: true, name: true, avatarUrl: true } },
+      },
+    });
+
+    const conversationsMap = new Map<string, any>();
+
+    for (const msg of messages) {
+      const otherUser = msg.senderId === userId ? msg.receiver : msg.sender;
+      if (!otherUser) continue;
+      
+      if (!conversationsMap.has(otherUser.id)) {
+        conversationsMap.set(otherUser.id, {
+          user: otherUser,
+          lastMessage: {
+            content: msg.content,
+            createdAt: msg.createdAt,
+            fileUrl: msg.fileUrl
+          }
+        });
+      }
+    }
+
+    return Array.from(conversationsMap.values());
   }
 }
 

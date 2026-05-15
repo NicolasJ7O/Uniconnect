@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { googleAuthSchema, googleWebAuthSchema, simpleAuthSchema, refreshSchema } from './auth.schemas.js';
-import { logout, refreshSession, signInWithGoogle, signInWithGoogleAccessToken, signInSimple } from './auth.service.js';
+import { googleAuthSchema, googleWebAuthSchema, simpleAuthSchema, refreshSchema, auth0AuthSchema } from './auth.schemas.js';
+import { logout, refreshSession, signInWithGoogle, signInWithGoogleAccessToken, signInSimple, signInWithAuth0 } from './auth.service.js';
 import { catchAsync } from '../../lib/catch-async.js';
 
 function getDeviceContext(req: Request): { ip?: string; userAgent?: string } {
@@ -26,6 +26,12 @@ export const googleSignInHandler = catchAsync(async (req: Request, res: Response
 export const googleWebSignInHandler = catchAsync(async (req: Request, res: Response) => {
   const data = googleWebAuthSchema.parse(req.body);
   const authData = await signInWithGoogleAccessToken(data.accessToken, getDeviceContext(req));
+  return res.status(200).json(authData);
+});
+
+export const auth0SignInHandler = catchAsync(async (req: Request, res: Response) => {
+  const data = auth0AuthSchema.parse(req.body);
+  const authData = await signInWithAuth0(data.accessToken, getDeviceContext(req));
   return res.status(200).json(authData);
 });
 

@@ -60,9 +60,12 @@ export class MentionDecorator extends MessageDecorator {
 
   process(): string {
     let content = this.component.process();
-    this.memberNames.forEach((name) => {
-      const firstName = name.split(' ')[0];
-      const regex = new RegExp(`@${firstName}`, 'gi');
+    // Unique first names to avoid double-wrapping the same name
+    const uniqueFirstNames = Array.from(new Set(this.memberNames.map(name => name.split(' ')[0])));
+    
+    uniqueFirstNames.forEach((firstName) => {
+      // Regex that matches @firstName only if it's not already inside a span or an html attribute
+      const regex = new RegExp(`(?<!<span class="mention">)@${firstName}(?!</span>)`, 'gi');
       content = content.replace(regex, `<span class="mention">@${firstName}</span>`);
     });
     return content;

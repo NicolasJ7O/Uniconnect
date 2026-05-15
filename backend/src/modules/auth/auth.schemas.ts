@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
 export const googleAuthSchema = z.object({
-  idToken: z.string().min(1, 'idToken is required'),
+  idToken: z.string({ required_error: 'ID Token is required' }).min(1),
+});
+
+export const auth0AuthSchema = z.object({
+  accessToken: z.string({ required_error: 'Access Token is required' }).min(1),
 });
 
 export const googleWebAuthSchema = z.object({

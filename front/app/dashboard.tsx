@@ -3,10 +3,13 @@ import { router, useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
 import { clearSession, loadSession, type SessionData } from '@/lib/session';
 import { getStudentProfile, type StudentProfile } from '@/lib/student-api';
+import { chatApi, type Conversation } from '@/lib/chat-api';
+import { logoutWithRefreshToken } from '@/lib/auth-api';
 
 export default function DashboardScreen() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -23,8 +26,10 @@ export default function DashboardScreen() {
         try {
           const studentData = await getStudentProfile();
           setProfile(studentData);
+          const userConversations = await chatApi.getConversations();
+          setConversations(userConversations);
         } catch (e) {
-          console.error('Error fetching profile', e);
+          console.error('Error fetching dashboard data', e);
         }
 
         setIsLoading(false);
@@ -37,8 +42,12 @@ export default function DashboardScreen() {
   async function handleLogout() {
     try {
       setIsLoggingOut(true);
+      const currentSession = await loadSession();
+      if (currentSession?.refreshToken) {
+        await logoutWithRefreshToken(currentSession.refreshToken);
+      }
     } catch {
-      // Ignore errors
+      // Ignore errors if backend fails, still clear local session
     } finally {
       await clearSession();
       setIsLoggingOut(false);
@@ -46,7 +55,9 @@ export default function DashboardScreen() {
         router.replace('/');
       }, 0);
     }
-  } if (isLoading) {
+  }
+
+  if (isLoading) {
     return (
       <View style={styles.loaderContainer}>
         <ActivityIndicator />
@@ -95,6 +106,31 @@ export default function DashboardScreen() {
               <Text style={styles.cardText}>Ninguna materia inscrita.</Text>
             )}
           </View>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Mensajes Privados</Text>
+        {conversations.length > 0 ? (
+          conversations.map((conv) => (
+            <Pressable
+              key={conv.user.id}
+              style={styles.chatRow}
+              onPress={() => router.push({ pathname: '/private-chat', params: { id: conv.user.id, name: conv.user.name } })}
+            >
+              <View style={styles.chatAvatar}>
+                <Text style={styles.chatAvatarText}>{conv.user.name?.charAt(0) || 'U'}</Text>
+              </View>
+              <View style={styles.chatInfo}>
+                <Text style={styles.chatName}>{conv.user.name}</Text>
+                <Text style={styles.chatPreview} numberOfLines={1}>
+                  {conv.lastMessage.fileUrl ? '📎 Archivo adjunto' : conv.lastMessage.content}
+                </Text>
+              </View>
+            </Pressable>
+          ))
+        ) : (
+          <Text style={styles.cardText}>No tienes mensajes privados aún.</Text>
         )}
       </View>
 
@@ -194,6 +230,40 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#f1f5f9',
     marginVertical: 12,
+  },
+  chatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  chatAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e2e8f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  chatAvatarText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  chatInfo: {
+    flex: 1,
+  },
+  chatName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  chatPreview: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 2,
   },
   subjectTags: {
     flexDirection: 'row',

@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { chatApi, type ChatMessage } from '@/lib/chat-api';
-import { getStudyGroupById, type StudyGroupMember } from '@/lib/study-group-api';
+import { getStudyGroupById, type StudyGroup, type StudyGroupMember } from '@/lib/study-group-api';
 import { loadSession, type SessionData } from '@/lib/session';
 import { useNotifications } from '@/context/NotificationContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,35 +11,59 @@ import * as DocumentPicker from 'expo-document-picker';
 import { decorateMessage } from '@/lib/message-decorator';
 
 export default function StudyGroupChat() {
-  const { id, title } = useLocalSearchParams<{ id: string, title?: string }>();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [session, setSession] = useState<SessionData | null>(null);
+  const [group, setGroup] = useState<StudyGroup | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchingMore, setFetchingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [file, setFile] = useState<any>(null);
   const [members, setMembers] = useState<StudyGroupMember[]>([]);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const flatListRef = useRef<FlatList>(null);
-  
+
   const { socket } = useNotifications();
 
-  useEffect(() => {
-    loadSession().then(setSession);
-    fetchHistory();
-  }, [id]);
-
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async (pageNumber: number) => {
     try {
-      const data = await chatApi.getGroupHistory(id);
-      setMessages(data);
-      const groupData = await getStudyGroupById(id);
-      setMembers(groupData.members);
+      if (pageNumber === 1) setLoading(true);
+      else setFetchingMore(true);
+
+      const data = await chatApi.getGroupHistory(id as string, pageNumber, 20);
+      setMessages(prev => pageNumber === 1 ? data.messages : [...data.messages, ...prev]);
+      setHasMore(data.page < data.totalPages);
+      setPage(pageNumber);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+      setFetchingMore(false);
     }
+  }, [id]);
+
+  const fetchGroupDetails = useCallback(async () => {
+    try {
+      const data = await getStudyGroupById(id as string);
+      setGroup(data);
+      if (data.members) setMembers(data.members);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadSession().then(setSession);
+    fetchGroupDetails();
+    fetchHistory(1);
+  }, [id, fetchHistory, fetchGroupDetails]);
+
+  const loadMore = () => {
+    if (!hasMore || fetchingMore || loading) return;
+    fetchHistory(page + 1);
   };
 
   useEffect(() => {
@@ -68,16 +92,20 @@ export default function StudyGroupChat() {
     if (!inputText.trim() && !file) return;
 
     try {
-      let fileToUpload = null;
+      let fileToUpload: any = null;
       if (file) {
-        fileToUpload = {
-          uri: file.uri,
-          type: file.mimeType || 'application/octet-stream',
-          name: file.name || `file_${Date.now()}`
-        };
+        if (Platform.OS === 'web' && file.file) {
+          fileToUpload = file.file;
+        } else {
+          fileToUpload = {
+            uri: file.uri,
+            type: file.mimeType || 'application/octet-stream',
+            name: file.name || `file_${Date.now()}`
+          };
+        }
       }
 
-      await chatApi.sendGroupMessage(id, inputText.trim(), fileToUpload);
+      await chatApi.sendGroupMessage(id as string, inputText.trim(), fileToUpload);
       setInputText('');
       setFile(null);
     } catch (e) {
@@ -129,19 +157,31 @@ export default function StudyGroupChat() {
     );
   };
 
-  if (loading) return <ActivityIndicator style={{ flex: 1 }} color={Colors.light.tint} />;
+  if (loading && !messages.length) return <ActivityIndicator style={{ flex: 1 }} color={Colors.light.tint} />;
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Stack.Screen options={{ title: title ? `Chat: ${title}` : 'Chat Grupal' }} />
-      
+      <Stack.Screen 
+        options={{ 
+          headerLeft: () => (
+            <Pressable onPress={() => router.back()} style={{ marginRight: 15 }}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </Pressable>
+          ),
+          title: group?.name ? `Chat: ${group.name}` : 'Chat Grupal' 
+        }} 
+      />
       <FlatList
         ref={flatListRef}
         data={messages}
         keyExtractor={item => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        onContentSizeChange={() => {
+            if (page === 1) flatListRef.current?.scrollToEnd({ animated: true })
+        }}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
       />
 
       {file && (

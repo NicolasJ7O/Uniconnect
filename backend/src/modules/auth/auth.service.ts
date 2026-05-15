@@ -240,6 +240,76 @@ export async function signInWithGoogleAccessToken(accessToken: string, device: D
   };
 }
 
+export async function signInWithAuth0(accessToken: string, device: DeviceContext) {
+  const auth0Domain = process.env.EXPO_PUBLIC_AUTH0_DOMAIN || 'dev-pk5s7tzyc17vqt54.us.auth0.com';
+  
+  const userInfoRes = await fetch(`https://${auth0Domain}/userinfo`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!userInfoRes.ok) {
+      throw new AppError(401, 'Invalid Auth0 access token');
+  }
+
+  const userInfo = await userInfoRes.json() as any;
+  const email: string = userInfo.email;
+  const sub: string = userInfo.sub;
+  const name: string | null = userInfo.name || userInfo.nickname || email;
+  const picture: string | null = userInfo.picture || null;
+
+  if (!email) {
+    throw new AppError(401, 'No email obtained from Auth0');
+  }
+
+  assertAllowedInstitutionalDomain(email);
+
+  // Find or create user
+  const identity = await prisma.authIdentity.findUnique({
+    where: { provider_providerUserId: { provider: 'auth0', providerUserId: sub } },
+    include: { user: true },
+  });
+
+  let user;
+  if (identity) {
+    user = await prisma.user.update({
+      where: { id: identity.userId },
+      data: { email, name: name ?? identity.user.name, avatarUrl: picture ?? identity.user.avatarUrl },
+    });
+  } else {
+    const existingByEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingByEmail) {
+      user = await prisma.user.update({
+        where: { id: existingByEmail.id },
+        data: {
+          name: name ?? existingByEmail.name,
+          avatarUrl: picture ?? existingByEmail.avatarUrl,
+          identities: { create: { provider: 'auth0', providerUserId: sub, emailAtProvider: email, hostedDomain: null } },
+        },
+      });
+    } else {
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: name ?? null,
+          avatarUrl: picture ?? null,
+          identities: { create: { provider: 'auth0', providerUserId: sub, emailAtProvider: email, hostedDomain: null } },
+        },
+      });
+    }
+  }
+
+  const refreshData = buildRefreshToken();
+  const expiresAt = new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+  const session = await prisma.session.create({
+    data: { userId: user.id, refreshTokenHash: refreshData.hash, userAgent: device.userAgent, ip: device.ip, expiresAt },
+  });
+
+  return {
+    accessToken: createAccessToken({ sub: user.id, email: user.email, role: user.role }),
+    refreshToken: `${session.id}.${refreshData.tokenPart}`,
+    user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl, role: user.role },
+  };
+}
 
 export async function refreshSession(refreshToken: string, device: DeviceContext) {
   const [sessionId, tokenPart] = refreshToken.split('.');

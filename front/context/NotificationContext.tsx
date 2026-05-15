@@ -78,6 +78,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                     `¡Te aceptaron en el grupo "${data.groupName}"!`,
                     'success',
                     () => {
+                        // @ts-ignore
                         router.push({ pathname: '/study-group-chat', params: { id: data.groupId, title: data.groupName }});
                     }
                 );
@@ -116,8 +117,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 // When a new chat or system notification arrives, show a toast
                 showToast(data.message, 'info', () => {
                     if (data.groupId) {
+                        // @ts-ignore
                         router.push({ pathname: '/study-group-chat', params: { id: data.groupId, title: data.groupName }});
                     } else if (data.senderId) {
+                        // @ts-ignore
                         router.push({ pathname: '/private-chat', params: { id: data.senderId, name: data.senderName }});
                     }
                 });
@@ -132,6 +135,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return () => {
             if (newSocket) newSocket.close();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshTransfers, showToast, handleResponse]);
 
     return (

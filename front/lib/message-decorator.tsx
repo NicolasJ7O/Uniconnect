@@ -10,12 +10,44 @@ export interface BaseMessageProps {
 
 // 1. Componente Base
 export const BaseMessage: React.FC<BaseMessageProps> = ({ content }) => {
-  return <Text style={styles.messageText}>{content}</Text>;
+  // Parse HTML from backend: mentions and links
+  const regex = /(<span class="mention">.*?<\/span>|<a href=".*?">.*?<\/a>)/gi;
+  const parts = content.split(regex);
+
+  if (parts.length === 1) {
+    const cleanContent = content.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+    return <Text style={styles.messageText}>{cleanContent}</Text>;
+  }
+
+  return (
+    <Text style={styles.messageText}>
+      {parts.map((part, index) => {
+        if (part.startsWith('<span class="mention"')) {
+          const innerText = part.replace(/<[^>]+>/g, '');
+          return <Text key={index} style={styles.inlineMention}>{innerText}</Text>;
+        }
+        if (part.startsWith('<a href="')) {
+          const matchUrl = part.match(/href="(.*?)"/);
+          const url = matchUrl ? matchUrl[1] : '';
+          const innerText = part.replace(/<[^>]+>/g, '');
+          return (
+            <Text key={index} style={styles.inlineLink} onPress={() => { if(url) Linking.openURL(url).catch(console.error); }}>
+              {innerText}
+            </Text>
+          );
+        }
+        
+        // Strip any residual/naked </span> tags that may have resulted from double-wrapping bugs from database history
+        const cleanPart = part.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/<\/span>/g, '').replace(/<span[^>]*>/g, '');
+        return <Text key={index}>{cleanPart}</Text>;
+      })}
+    </Text>
+  );
 };
 
 // 2. Decorador de Adjunto
 export const withAttachment = (WrappedComponent: React.FC<BaseMessageProps>, fileUrl: string, fileName: string, fileType: string) => {
-  return (props: BaseMessageProps) => {
+  return function AttachmentDecorator(props: BaseMessageProps) {
     const handleOpenFile = () => {
       if (fileUrl) {
         const fullUrl = authConfig.backendUrl.replace('/api', '') + fileUrl;
@@ -46,7 +78,7 @@ export const withAttachment = (WrappedComponent: React.FC<BaseMessageProps>, fil
 
 // 3. Decorador de Mención
 export const withMention = (WrappedComponent: React.FC<BaseMessageProps>, isMentioned: boolean) => {
-  return (props: BaseMessageProps) => {
+  return function MentionDecorator(props: BaseMessageProps) {
     return (
       <View style={[styles.decoratedContainer, isMentioned && styles.mentionHighlight]}>
         <WrappedComponent {...props} />
@@ -100,5 +132,14 @@ const styles = StyleSheet.create({
     color: Colors.light.tint,
     fontWeight: 'bold',
     flex: 1,
+  },
+  inlineMention: {
+    color: '#d97706',
+    fontWeight: 'bold',
+    backgroundColor: '#fef3c7',
+  },
+  inlineLink: {
+    color: Colors.light.tint,
+    textDecorationLine: 'underline',
   }
 });

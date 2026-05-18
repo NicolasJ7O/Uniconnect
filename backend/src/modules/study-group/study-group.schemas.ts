@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const createStudyGroupSchema = z.object({
     name: z.string().min(3).max(100),
     description: z.string().max(500).optional(),
+    subjectId: z.string().cuid().optional(), // Make it optional for backwards compatibility or required if needed
 });
 
 export type CreateStudyGroupInput = z.infer<typeof createStudyGroupSchema>;

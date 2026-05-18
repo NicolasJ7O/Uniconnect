@@ -87,7 +87,7 @@ export class ChatService {
 
     // Notifications logic
     for (const member of group.members) {
-      if (member.id !== senderId) {
+      if (String(member.id) !== String(senderId)) {
         const memberFirstName = member.name?.split(' ')[0];
         const isMentioned = !!memberFirstName && content.includes(`@${memberFirstName}`);
 
@@ -193,18 +193,20 @@ export class ChatService {
     io.to(`user-${senderId}`).emit('private-message', message);
 
     // Notification logic
-    const notif = await prisma.notification.create({
-      data: {
-        userId: receiverId,
-        type: 'PRIVATE_MESSAGE',
-        message: `Nuevo mensaje privado de ${message.sender.name}`,
-      }
-    });
-    emitToUser(receiverId, 'new-notification', {
-      ...notif,
-      senderId: senderId,
-      senderName: message.sender.name || 'Usuario'
-    });
+    if (String(receiverId) !== String(senderId)) {
+      const notif = await prisma.notification.create({
+        data: {
+          userId: receiverId,
+          type: 'PRIVATE_MESSAGE',
+          message: `Nuevo mensaje privado de ${message.sender.name}`,
+        }
+      });
+      emitToUser(receiverId, 'new-notification', {
+        ...notif,
+        senderId: senderId,
+        senderName: message.sender.name || 'Usuario'
+      });
+    }
 
     return message;
   }

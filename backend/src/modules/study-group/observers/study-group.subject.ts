@@ -8,7 +8,9 @@ export type StudyGroupEvent =
   | 'JOIN_REQUEST_CREATED'
   | 'JOIN_REQUEST_ACCEPTED'
   | 'JOIN_REQUEST_REJECTED'
-  | 'OWNERSHIP_TRANSFERRED';
+  | 'JOIN_REQUESTED'
+  | 'OWNERSHIP_TRANSFERRED'
+  | 'OWNERSHIP_TRANSFER_REQUESTED';
 
 export interface Observer {
   update(event: StudyGroupEvent, data: any): Promise<void>;

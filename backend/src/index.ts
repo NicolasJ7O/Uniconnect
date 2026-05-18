@@ -81,8 +81,14 @@ app.use('/auth', authRouter);
 app.use('/student', studentRouter);
 app.use('/groups', studyGroupRouter);
 
+import notificationRouter from './modules/notification/notification.route.js';
+app.use('/notifications', notificationRouter);
+
 import { chatRouter } from './modules/chat/chat.routes.js';
 app.use('/chat', chatRouter);
+
+import { eventRouter } from './modules/event/event.routes.js';
+app.use('/events', eventRouter);
 
 // Global Error Handler
 app.use(errorHandler);

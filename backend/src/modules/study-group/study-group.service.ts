@@ -40,6 +40,15 @@ export async function createStudyGroup(ownerId: string, data: CreateStudyGroupIn
         }
     }
 
+    if (data.subjectId) {
+        const groupCount = await prisma.studyGroup.count({
+            where: { subjectId: data.subjectId }
+        });
+        if (groupCount >= 3) {
+            throw new AppError(400, 'Ya existen 3 grupos registrados para esta asignatura. No se pueden crear más.');
+        }
+    }
+
     const group = await prisma.studyGroup.create({
         data: {
             ...data,
@@ -424,7 +433,7 @@ export async function requestToJoinGroup(studentId: string, groupId: string, pay
     }
 
     // Create or update the request (upsert with status PENDING)
-    return prisma.studyGroupRequest.upsert({
+    const request = await prisma.studyGroupRequest.upsert({
         where: {
             groupId_userId: {
                 groupId: groupId,
@@ -438,6 +447,19 @@ export async function requestToJoinGroup(studentId: string, groupId: string, pay
             status: 'PENDING'
         }
     });
+
+    const student = await prisma.user.findUnique({ where: { id: dbStudentId }, select: { name: true } });
+
+    studyGroupSubject.notify('JOIN_REQUESTED', {
+        ownerId: group.ownerId,
+        groupId: group.id,
+        groupName: group.name,
+        studentId: dbStudentId,
+        studentName: student?.name || 'Un estudiante',
+        requestId: request.id
+    });
+
+    return request;
 }
 
 export async function getGroupRequests(ownerId: string, groupId: string, payload?: any) {
@@ -622,7 +644,8 @@ export async function createOwnershipTransferRequest(ownerId: string, groupId: s
     });
 
     // Notify the candidate
-    emitToUser(newOwnerId, 'ownership-transfer-requested', {
+    studyGroupSubject.notify('OWNERSHIP_TRANSFER_REQUESTED', {
+        toId: newOwnerId,
         id: request.id,
         groupId: group.id,
         groupName: group.name,

@@ -26,6 +26,7 @@ model User {
   ownedGroups    StudyGroup[]         @relation("GroupOwner")
   memberOfGroups StudyGroup[]         @relation("GroupMembers")
   uploadedResources StudyGroupResource[]
+  eventSubscriptions EventSubscription[] @relation("EventSubscriptions")
   posts           Post[]              @relation("UserPosts")
   comments        Comment[]           @relation("UserComments")
   organizedEvents Event[]             @relation("OrganizedEvents")
@@ -46,6 +47,7 @@ model Subject {
   updatedAt DateTime @updatedAt
 
   students User[] @relation("StudentSubjects")
+  studyGroups StudyGroup[] @relation("SubjectGroups")
 }
 
 model AuthIdentity {
@@ -83,10 +85,12 @@ model StudyGroup {
   name        String
   description String?
   ownerId     String
+  subjectId   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   owner     User                 @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  subject   Subject?             @relation("SubjectGroups", fields: [subjectId], references: [id], onDelete: Cascade)
   members   User[]               @relation("GroupMembers")
   resources StudyGroupResource[]
   requests StudyGroupRequest[] @relation("GroupRequests")
@@ -153,11 +157,23 @@ model Event {
   description String
   eventDate   DateTime
   location    String?
+  category    String   @default("OTRO") // ACADEMICO, CULTURAL, DEPORTIVO, TECNOLOGIA, OTRO
   organizerId String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   organizer User @relation("OrganizedEvents", fields: [organizerId], references: [id], onDelete: Cascade)
+}
+
+model EventSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  category  String
+  createdAt DateTime @default(now())
+
+  user User @relation("EventSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
 }
 
 model StudyGroupRequest {
@@ -181,6 +197,7 @@ model Notification {
   message   String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+  metadata  Json?
 
   user User @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
 }

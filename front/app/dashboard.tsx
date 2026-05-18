@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, ScrollView, Modal, FlatList, TouchableOpacity } from 'react-native';
 import { clearSession, loadSession, type SessionData } from '@/lib/session';
 import { getStudentProfile, type StudentProfile } from '@/lib/student-api';
 import { chatApi, type Conversation } from '@/lib/chat-api';
 import { logoutWithRefreshToken } from '@/lib/auth-api';
+import { useNotifications } from '@/context/NotificationContext';
 
 export default function DashboardScreen() {
   const [session, setSession] = useState<SessionData | null>(null);
@@ -12,6 +13,7 @@ export default function DashboardScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { reconnectSocket } = useNotifications();
 
   useFocusEffect(
     useCallback(() => {
@@ -22,6 +24,7 @@ export default function DashboardScreen() {
           return;
         }
         setSession(stored);
+        reconnectSocket();
 
         try {
           const studentData = await getStudentProfile();
@@ -72,8 +75,14 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Dashboard</Text>
-      <Text style={styles.subtitle}>Bienvenido a UniConnect.</Text>
+      <View style={styles.headerContainer}>
+        <View>
+          <Text style={styles.title}>Dashboard</Text>
+          <Text style={styles.subtitle}>Bienvenido a UniConnect.</Text>
+        </View>
+      </View>
+
+
 
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -110,6 +119,26 @@ export default function DashboardScreen() {
       </View>
 
       <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Grupos de Estudio</Text>
+        </View>
+        <Text style={styles.cardText}>Explora los grupos disponibles o gestiona los tuyos.</Text>
+        <Pressable style={styles.actionButton} onPress={() => router.push('/study-groups')}>
+          <Text style={styles.actionButtonLabel}>Ir a Grupos de Estudio</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Eventos Universitarios</Text>
+        </View>
+        <Text style={styles.cardText}>Explora eventos, fíltralos por categoría y suscríbete a notificaciones.</Text>
+        <Pressable style={[styles.actionButton, { backgroundColor: '#0284c7', borderColor: '#bae6fd' }]} onPress={() => router.push('/events')}>
+          <Text style={styles.actionButtonLabel}>Explorar Eventos</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.cardTitle}>Mensajes Privados</Text>
         {conversations.length > 0 ? (
           conversations.map((conv) => (
@@ -133,10 +162,6 @@ export default function DashboardScreen() {
           <Text style={styles.cardText}>No tienes mensajes privados aún.</Text>
         )}
       </View>
-
-      <Pressable style={styles.actionButton} onPress={() => router.push('/study-groups')}>
-        <Text style={styles.actionButtonLabel}>Grupos de Estudio</Text>
-      </Pressable>
 
       <Pressable style={styles.logoutButton} disabled={isLoggingOut} onPress={handleLogout}>
         <Text style={styles.logoutLabel}>{isLoggingOut ? 'Cerrando...' : 'Cerrar sesión'}</Text>
@@ -164,16 +189,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#475569',
   },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
     color: '#0f172a',
   },
   subtitle: {
-    marginTop: 6,
-    marginBottom: 18,
+    marginTop: 2,
     color: '#334155',
-    fontSize: 15,
+    fontSize: 14,
   },
   card: {
     backgroundColor: '#ffffff',

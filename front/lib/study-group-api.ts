@@ -42,7 +42,7 @@ export async function getStudentStudyGroups(studentId: string): Promise<StudyGro
     return response.data;
 }
 
-export async function createStudyGroup(data: { name: string; description?: string }): Promise<StudyGroup> {
+export async function createStudyGroup(data: { name: string; description?: string; subjectId?: string }): Promise<StudyGroup> {
     const response = await apiClient.post<StudyGroup>('/groups', data);
     return response.data;
 }

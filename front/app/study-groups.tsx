@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View, Modal, Platform, Alert, TouchableOpacity, KeyboardAvoidingView } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View, Modal, Platform, Alert, TouchableOpacity, KeyboardAvoidingView, FlatList } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { loadSession, type SessionData } from '@/lib/session';
+import apiClient from '@/lib/api-client';
 import {
     getStudentStudyGroups,
     createStudyGroup,
@@ -46,6 +47,9 @@ export default function StudyGroupsScreen() {
     const [newGroupName, setNewGroupName] = useState('');
     const [newGroupDesc, setNewGroupDesc] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+    const [subjects, setSubjects] = useState<{ id: string; name: string }[]>([]);
+    const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+    const [subjectSearch, setSubjectSearch] = useState('');
 
     // Edit state
     const [editingGroup, setEditingGroup] = useState<StudyGroup | null>(null);
@@ -113,6 +117,19 @@ export default function StudyGroupsScreen() {
         }, [])
     );
 
+    const fetchSubjects = useCallback(async () => {
+        try {
+            const res = await apiClient.get<{ id: string; name: string }[]>('/student/subjects');
+            setSubjects(res.data);
+        } catch (e) {
+            console.error('Error fetching subjects', e);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (isCreateModalVisible) fetchSubjects();
+    }, [isCreateModalVisible, fetchSubjects]);
+
     const handleCreateGroup = async () => {
         const trimmedName = newGroupName.trim();
         if (!trimmedName) return;
@@ -127,19 +144,19 @@ export default function StudyGroupsScreen() {
             const created = await createStudyGroup({
                 name: trimmedName,
                 description: newGroupDesc.trim() || undefined,
+                subjectId: selectedSubjectId || undefined,
             });
             setGroups([created, ...groups]);
             setCreateModalVisible(false);
             setNewGroupName('');
             setNewGroupDesc('');
+            setSelectedSubjectId(null);
+            setSubjectSearch('');
             showToast('Grupo creado con éxito', 'success');
         } catch (error: any) {
             console.error('Error creating group', error);
-            // errorHandler already shows an Alert in the apiClient interceptor, 
-            // but we can provide more context here if needed.
-            if (error.response?.data?.message) {
-                // The global errorHandler will show this, but we'll log it for debugging
-            }
+            const msg = error?.response?.data?.message;
+            if (msg) showToast(msg, 'error');
         } finally {
             setIsCreating(false);
         }
@@ -908,10 +925,48 @@ export default function StudyGroupsScreen() {
                                     numberOfLines={3}
                                 />
 
+                                <Text style={styles.label}>Asignatura (Opcional)</Text>
+                                <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 8, marginTop: -8 }}>
+                                    Máximo 3 grupos por asignatura. Selecciona para validar el límite.
+                                </Text>
+                                <TextInput
+                                    style={[styles.input, { marginBottom: 6 }]}
+                                    value={subjectSearch}
+                                    onChangeText={setSubjectSearch}
+                                    placeholder="Buscar asignatura..."
+                                    placeholderTextColor="#94a3b8"
+                                />
+                                {selectedSubjectId && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, backgroundColor: '#dbeafe', padding: 8, borderRadius: 8 }}>
+                                        <Text style={{ flex: 1, color: '#1d4ed8', fontWeight: '600' }}>
+                                            ✓ {subjects.find(s => s.id === selectedSubjectId)?.name}
+                                        </Text>
+                                        <Pressable onPress={() => setSelectedSubjectId(null)}>
+                                            <Text style={{ color: '#ef4444', fontWeight: 'bold' }}>✕</Text>
+                                        </Pressable>
+                                    </View>
+                                )}
+                                {subjectSearch.trim().length > 0 && (
+                                    <ScrollView style={{ maxHeight: 150, marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8 }}>
+                                        {subjects
+                                            .filter(s => s.name.toLowerCase().includes(subjectSearch.toLowerCase()))
+                                            .map(s => (
+                                                <Pressable
+                                                    key={s.id}
+                                                    style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', backgroundColor: selectedSubjectId === s.id ? '#eff6ff' : 'white' }}
+                                                    onPress={() => { setSelectedSubjectId(s.id); setSubjectSearch(''); }}
+                                                >
+                                                    <Text style={{ color: '#0f172a' }}>{s.name}</Text>
+                                                </Pressable>
+                                            ))
+                                        }
+                                    </ScrollView>
+                                )}
+
                                 <View style={styles.modalActions}>
                                     <Pressable
                                         style={[styles.modalButton, styles.cancelModalButton]}
-                                        onPress={() => setCreateModalVisible(false)}
+                                        onPress={() => { setCreateModalVisible(false); setSelectedSubjectId(null); setSubjectSearch(''); }}
                                         disabled={isCreating}
                                     >
                                         <Text style={styles.cancelModalButtonText}>Cancelar</Text>

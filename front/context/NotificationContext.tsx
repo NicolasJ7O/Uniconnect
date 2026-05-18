@@ -6,11 +6,18 @@ import { loadSession } from '@/lib/session';
 import { useToast } from '@/components/Toast';
 import { getPendingOwnershipTransfers, respondToOwnershipTransfer } from '@/lib/study-group-api';
 import { Alert } from 'react-native';
+import { notificationApi } from '@/lib/notification-api';
 
 interface NotificationContextType {
     pendingTransfers: any[];
     refreshTransfers: () => Promise<void>;
     socket: Socket | null;
+    unreadCount: number;
+    refreshUnreadCount: () => Promise<void>;
+    decrementUnreadCount: () => void;
+    isModalVisible: boolean;
+    setModalVisible: (visible: boolean) => void;
+    reconnectSocket: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -18,7 +25,15 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [pendingTransfers, setPendingTransfers] = useState<any[]>([]);
+    const [unreadCount, setUnreadCount] = useState<number>(0);
+    const [isModalVisible, setModalVisible] = useState(false);
     const { showToast } = useToast();
+
+    const [sessionKey, setSessionKey] = useState(Date.now());
+
+    const reconnectSocket = useCallback(() => {
+        setSessionKey(Date.now());
+    }, []);
 
     const refreshTransfers = useCallback(async () => {
         try {
@@ -29,16 +44,31 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
     }, []);
 
+    const refreshUnreadCount = useCallback(async () => {
+        try {
+            const notifs = await notificationApi.getNotifications();
+            const unread = notifs.filter(n => !n.isRead).length;
+            setUnreadCount(unread);
+        } catch (error) {
+            console.error('Error refreshing unread count', error);
+        }
+    }, []);
+
+    const decrementUnreadCount = useCallback(() => {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+    }, []);
+
     const handleResponse = useCallback(async (groupId: string, requestId: string, accept: boolean) => {
         try {
             await respondToOwnershipTransfer(groupId, requestId, accept);
             showToast(accept ? 'Ahora eres el administrador' : 'Invitación rechazada', 'success');
             const transfers = await getPendingOwnershipTransfers();
             setPendingTransfers(transfers);
+            refreshUnreadCount();
         } catch (error) {
             console.error('Error responding to transfer', error);
         }
-    }, [showToast]);
+    }, [showToast, refreshUnreadCount]);
 
     useEffect(() => {
         let newSocket: Socket | null = null;
@@ -59,11 +89,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             });
 
             newSocket.on('connect', () => {
-                console.log('Socket connected for user:', session.user.id);
+                console.log('Socket connected with ID:', newSocket?.id, 'for user:', session.user.id);
                 newSocket?.emit('join-user', session.user.id);
+                refreshUnreadCount();
+                refreshTransfers();
             });
 
             newSocket.on('study-group-request-rejected', (data) => {
+                refreshUnreadCount();
                 showToast(
                     `Tu solicitud para el grupo "${data.groupName}" fue rechazada`,
                     'error',
@@ -74,6 +107,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             });
 
             newSocket.on('study-group-request-accepted', (data) => {
+                refreshUnreadCount();
                 showToast(
                     `¡Te aceptaron en el grupo "${data.groupName}"!`,
                     'success',
@@ -85,38 +119,31 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             });
 
             newSocket.on('ownership-transfer-requested', (data) => {
-                showToast(`Nueva invitación de administración: ${data.groupName}`, 'info');
+                refreshUnreadCount();
+                showToast(`Nueva invitación de administración de "${data.groupName}"`, 'info');
                 refreshTransfers();
-                
-                Alert.alert(
-                    'Nueva Invitación de Administración',
-                    `${data.fromName} quiere entregarte la administración del grupo "${data.groupName}". ¿Aceptas?`,
-                    [
-                        { 
-                            text: 'Rechazar', 
-                            style: 'cancel',
-                            onPress: () => handleResponse(data.groupId, data.id, false)
-                        },
-                        { 
-                            text: 'Aceptar', 
-                            onPress: () => handleResponse(data.groupId, data.id, true)
-                        }
-                    ]
-                );
             });
 
             newSocket.on('ownership-transfer-accepted', (data) => {
+                refreshUnreadCount();
                 showToast(`¡Transferencia completada! Ya no eres el administrador de ${data.groupName}`, 'success');
             });
 
             newSocket.on('ownership-transfer-rejected', (data) => {
+                refreshUnreadCount();
                 showToast(data.message, 'error');
             });
 
             newSocket.on('new-notification', (data) => {
+                console.log('Got new-notification event in context:', data);
+                refreshUnreadCount();
+                refreshTransfers();
+                
                 // When a new chat or system notification arrives, show a toast
                 showToast(data.message, 'info', () => {
-                    if (data.groupId) {
+                    if (data.eventId) {
+                        router.push({ pathname: '/events' });
+                    } else if (data.groupId) {
                         // @ts-ignore
                         router.push({ pathname: '/study-group-chat', params: { id: data.groupId, title: data.groupName }});
                     } else if (data.senderId) {
@@ -128,6 +155,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
             setSocket(newSocket);
             refreshTransfers();
+            refreshUnreadCount();
         }
 
         init();
@@ -136,10 +164,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             if (newSocket) newSocket.close();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [refreshTransfers, showToast, handleResponse]);
+    }, [sessionKey, refreshTransfers, refreshUnreadCount, showToast, handleResponse]);
 
     return (
-        <NotificationContext.Provider value={{ pendingTransfers, refreshTransfers, socket }}>
+        <NotificationContext.Provider value={{ 
+            pendingTransfers, refreshTransfers, socket, unreadCount, 
+            refreshUnreadCount, decrementUnreadCount, isModalVisible, setModalVisible, reconnectSocket 
+        }}>
             {children}
         </NotificationContext.Provider>
     );

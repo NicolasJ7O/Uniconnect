@@ -2,7 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../errors/app-error.js';
 import { emitToUser } from '../../lib/socket.js';
 import type { CreateStudyGroupInput, UpdateStudyGroupInput, AddMembersInput, CreateResourceInput } from './study-group.schemas.js';
-import { studyGroupSubject } from './observers/index.js';
+import { studyGroupSubject, grupoEstudioSubject } from './observers/index.js';
 
 export async function getStudyGroupById(groupId: string, userPayload?: any) {
     const group = await prisma.studyGroup.findUnique({
@@ -459,6 +459,15 @@ export async function requestToJoinGroup(studentId: string, groupId: string, pay
         requestId: request.id
     });
 
+    grupoEstudioSubject.notify('SOLICITUD_INGRESO', {
+        ownerId: group.ownerId,
+        groupId: group.id,
+        groupName: group.name,
+        studentId: dbStudentId,
+        studentName: student?.name || 'Un estudiante',
+        requestId: request.id
+    });
+
     return request;
 }
 
@@ -527,8 +536,21 @@ export async function respondToGroupRequest(ownerId: string, groupId: string, re
             groupId: group.id,
             groupName: group.name
         });
+
+        grupoEstudioSubject.notify('MIEMBRO_ACEPTADO', {
+            userId: request.userId,
+            groupId: group.id,
+            groupName: group.name
+        });
     } else if (status === 'REJECTED') {
         studyGroupSubject.notify('JOIN_REQUEST_REJECTED', {
+            userId: request.userId,
+            groupId: group.id,
+            groupName: group.name,
+            ownerName: group.owner.name
+        });
+
+        grupoEstudioSubject.notify('MIEMBRO_RECHAZADO', {
             userId: request.userId,
             groupId: group.id,
             groupName: group.name,
@@ -652,6 +674,14 @@ export async function createOwnershipTransferRequest(ownerId: string, groupId: s
         fromName: group.owner.name || group.owner.email
     });
 
+    grupoEstudioSubject.notify('TRANSFERENCIA_ADMIN_SOLICITADA', {
+        toId: newOwnerId,
+        id: request.id,
+        groupId: group.id,
+        groupName: group.name,
+        fromName: group.owner.name || group.owner.email
+    });
+
     return request;
 }
 
@@ -724,6 +754,12 @@ export async function respondToOwnershipTransferRequest(userId: string, groupId:
 
     // Notify via observer
     studyGroupSubject.notify('OWNERSHIP_TRANSFERRED', {
+        fromId: request.fromId,
+        groupId: request.groupId,
+        groupName: request.group.name
+    });
+
+    grupoEstudioSubject.notify('TRANSFERENCIA_ADMIN_ACEPTADA', {
         fromId: request.fromId,
         groupId: request.groupId,
         groupName: request.group.name

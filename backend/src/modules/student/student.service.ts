@@ -1,6 +1,12 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../errors/app-error.js';
 import type { UpdateProfileInput } from './student.schemas.js';
+import {
+  type IPerfil,
+  PerfilBase,
+  PerfilConEstadisticas,
+  PerfilConInsignias,
+} from './decorators/profile.decorator.js';
 
 export async function getStudentProfile(userId: string, payload?: any) {
     let user = await prisma.user.findUnique({
@@ -219,4 +225,87 @@ export async function searchStudentsByName(query: string, searcherId: string, pa
         },
         take: 10
     });
+}
+
+export async function getStudentProfileById(targetUserId: string, vistaCompleta: boolean) {
+    const user = await prisma.user.findUnique({
+        where: { id: targetUserId },
+        select: {
+            id: true,
+            email: true,
+            name: true,
+            avatarUrl: true,
+            career: true,
+            currentSemester: true,
+            subjects: {
+                select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                    credits: true,
+                },
+            },
+        },
+    });
+
+    if (!user) {
+        throw new AppError(404, 'Usuario no encontrado');
+    }
+
+    // Perfil Base
+    let perfil: IPerfil = new PerfilBase(
+        user.id,
+        user.name || 'Estudiante',
+        user.email,
+        user.avatarUrl,
+        user.career,
+        user.currentSemester,
+        user.subjects
+    );
+
+    if (vistaCompleta) {
+        // Fetch stats from DB
+        const [gruposCreados, gruposParticipa, mensajesEnviados] = await Promise.all([
+            prisma.studyGroup.count({
+                where: { ownerId: targetUserId },
+            }),
+            prisma.studyGroup.count({
+                where: {
+                    members: {
+                        some: { id: targetUserId },
+                    },
+                },
+            }),
+            prisma.message.count({
+                where: { senderId: targetUserId },
+            }),
+        ]);
+
+        // Compose with statistics
+        perfil = new PerfilConEstadisticas(perfil, {
+            gruposCreados,
+            gruposParticipa,
+            mensajesEnviados,
+        });
+
+        // Determine milestones for insignias
+        const insignias: string[] = [];
+        if (gruposCreados >= 1) {
+            insignias.push("Fundador");
+        }
+        if (gruposParticipa >= 3) {
+            insignias.push("Colaborador Estrella");
+        }
+        if (mensajesEnviados >= 10) {
+            insignias.push("Gran Comunicador");
+        }
+        if (user.subjects && user.subjects.length >= 1) {
+            insignias.push("Estudiante Activo");
+        }
+
+        // Compose with insignias
+        perfil = new PerfilConInsignias(perfil, insignias);
+    }
+
+    return perfil.toJSON();
 }

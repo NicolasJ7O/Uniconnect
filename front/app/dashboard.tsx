@@ -2,7 +2,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, ScrollView, Modal, FlatList, TouchableOpacity } from 'react-native';
 import { clearSession, loadSession, type SessionData } from '@/lib/session';
-import { getStudentProfile, type StudentProfile } from '@/lib/student-api';
+import { getStudentProfile, getEnrichedStudentProfile, type StudentProfile } from '@/lib/student-api';
 import { chatApi, type Conversation } from '@/lib/chat-api';
 import { logoutWithRefreshToken } from '@/lib/auth-api';
 import { useNotifications } from '@/context/NotificationContext';
@@ -10,6 +10,7 @@ import { useNotifications } from '@/context/NotificationContext';
 export default function DashboardScreen() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [enrichedProfile, setEnrichedProfile] = useState<any>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -29,6 +30,14 @@ export default function DashboardScreen() {
         try {
           const studentData = await getStudentProfile();
           setProfile(studentData);
+          
+          try {
+            const enrichedData = await getEnrichedStudentProfile(studentData.id);
+            setEnrichedProfile(enrichedData);
+          } catch (profileErr) {
+            console.error('Error fetching decorated profile stats', profileErr);
+          }
+
           const userConversations = await chatApi.getConversations();
           setConversations(userConversations);
         } catch (e) {
@@ -117,6 +126,45 @@ export default function DashboardScreen() {
           </View>
         )}
       </View>
+
+      {/* Insignias y Logros (Decorator Pattern) */}
+      {enrichedProfile && enrichedProfile.insignias && enrichedProfile.insignias.length > 0 && (
+        <View style={[styles.card, { backgroundColor: '#fdf2f8', borderColor: '#fbcfe8' }]}>
+          <Text style={[styles.cardTitle, { color: '#db2777' }]}>🏆 Mis Logros e Insignias (Decorator)</Text>
+          <Text style={[styles.cardText, { color: '#9d174d', marginBottom: 12, fontSize: 13, fontStyle: 'italic' }]}>Desbloqueados dinámicamente según hitos en UniConnect</Text>
+          <View style={styles.badgeContainer}>
+            {enrichedProfile.insignias.map((badge: string, idx: number) => {
+              const emoji = badge === 'Fundador' ? '🏗️' : badge === 'Colaborador Estrella' ? '⭐' : badge === 'Gran Comunicador' ? '🗣️' : '🎓';
+              return (
+                <View key={idx} style={[styles.badgeItem, { backgroundColor: '#fce7f3', borderColor: '#fbcfe8' }]}>
+                  <Text style={[styles.badgeText, { color: '#be185d', fontWeight: 'bold' }]}>{emoji} {badge}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* Estadísticas de Uso (Decorator Pattern) */}
+      {enrichedProfile && enrichedProfile.stats && (
+        <View style={[styles.card, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
+          <Text style={[styles.cardTitle, { color: '#166534' }]}>📊 Estadísticas de Actividad (Decorator)</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>{enrichedProfile.stats.gruposCreados}</Text>
+              <Text style={styles.statLabel}>Grupos creados</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>{enrichedProfile.stats.gruposParticipa}</Text>
+              <Text style={styles.statLabel}>Grupos miembro</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statNumber}>{enrichedProfile.stats.mensajesEnviados}</Text>
+              <Text style={styles.statLabel}>Mensajes chat</Text>
+            </View>
+          </View>
+        </View>
+      )}
 
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -327,5 +375,47 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '700',
     fontSize: 15,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  badgeItem: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 8,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dcfce7',
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#15803d',
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#166534',
+    marginTop: 2,
+    textAlign: 'center',
   },
 });

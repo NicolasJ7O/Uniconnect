@@ -81,6 +81,10 @@ app.use('/auth', authRouter);
 app.use('/student', studentRouter);
 app.use('/groups', studyGroupRouter);
 
+import { getProfileByIdHandler } from './modules/student/student.controller.js';
+import { requireAuth } from './modules/auth/auth.middleware.js';
+app.get('/perfil/:id', requireAuth, getProfileByIdHandler);
+
 import notificationRouter from './modules/notification/notification.route.js';
 app.use('/notifications', notificationRouter);
 
@@ -89,6 +93,7 @@ app.use('/chat', chatRouter);
 
 import { eventRouter } from './modules/event/event.routes.js';
 app.use('/events', eventRouter);
+app.use('/eventos', eventRouter);
 
 // Global Error Handler
 app.use(errorHandler);

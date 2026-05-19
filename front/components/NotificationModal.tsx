@@ -201,6 +201,25 @@ export default function NotificationModal() {
 
   const renderNotification = ({ item }: { item: Notification }) => (
     <View style={[styles.notificationItem, !item.isRead && styles.notificationItemUnread]}>
+      {/* Priority Badge (Decorator Pattern) */}
+      {(item as any).nivel && (
+        <View style={[
+          styles.priorityBadge, 
+          (item as any).nivel === 'critica' ? styles.priorityCritica : 
+          (item as any).nivel === 'urgente' ? styles.priorityUrgente : 
+          styles.priorityNormal
+        ]}>
+          <Text style={[
+            styles.priorityText,
+            (item as any).nivel === 'critica' ? styles.priorityTextCritica : 
+            (item as any).nivel === 'urgente' ? styles.priorityTextUrgente : 
+            styles.priorityTextNormal
+          ]}>
+            {(item as any).nivel.toUpperCase()}
+          </Text>
+        </View>
+      )}
+
       <TouchableOpacity 
         style={styles.notificationContent}
         onPress={() => handleNotificationPress(item)}
@@ -217,6 +236,20 @@ export default function NotificationModal() {
       </TouchableOpacity>
       
       {renderActionButtons(item)}
+
+      {/* Inline Action CTA (Decorator Pattern) */}
+      {(item as any).accion && !resolvedMap[item.id] && (
+        <Pressable
+          style={styles.ctaButton}
+          onPress={() => {
+            handleMarkAsRead(item.id, item.isRead);
+            setModalVisible(false);
+            router.push((item as any).accion.endpoint);
+          }}
+        >
+          <Text style={styles.ctaButtonLabel}>👉 {(item as any).accion.label}</Text>
+        </Pressable>
+      )}
       
       <TouchableOpacity onPress={() => handleDeleteNotification(item.id, item.isRead)} style={styles.deleteButton}>
         <Text style={styles.deleteButtonText}>✕</Text>
@@ -410,5 +443,48 @@ const styles = StyleSheet.create({
   emptyNotificationsText: {
     fontSize: 16,
     color: '#64748b',
+  },
+  priorityBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  priorityNormal: {
+    backgroundColor: '#f1f5f9',
+  },
+  priorityUrgente: {
+    backgroundColor: '#ffedd5',
+  },
+  priorityCritica: {
+    backgroundColor: '#fee2e2',
+  },
+  priorityText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  priorityTextNormal: {
+    color: '#64748b',
+  },
+  priorityTextUrgente: {
+    color: '#ea580c',
+  },
+  priorityTextCritica: {
+    color: '#dc2626',
+  },
+  ctaButton: {
+    marginTop: 8,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#ccfbf1',
+    borderRadius: 8,
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+  ctaButtonLabel: {
+    fontSize: 12,
+    color: '#0d9488',
+    fontWeight: 'bold',
   },
 });

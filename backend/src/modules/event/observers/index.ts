@@ -1,7 +1,7 @@
-import { EventSubject } from './event.subject.js';
-import { EventNotificationObserver } from './notification.observer.js';
+import { EventoUniversidadSubject } from './event.subject.js';
+import { EventoNotificationObserver } from './notification.observer.js';
 
-const eventSubject = EventSubject.getInstance();
-eventSubject.attach(new EventNotificationObserver());
+const eventSubject = EventoUniversidadSubject.getInstance();
+eventSubject.attach(new EventoNotificationObserver());
 
 export { eventSubject };

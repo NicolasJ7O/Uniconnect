@@ -8,11 +8,17 @@ export const createEventSchema = z.object({
     description: z.string().min(5).max(1000),
     eventDate: z.string().datetime(),
     location: z.string().max(300).optional(),
-    category: z.enum(EVENT_CATEGORIES).default('OTRO'),
+    category: z.preprocess(
+        (val) => (typeof val === 'string' ? val.toUpperCase() : val),
+        z.enum(EVENT_CATEGORIES)
+    ).default('OTRO'),
 });
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 
 export const subscribeCategorySchema = z.object({
-    category: z.enum(EVENT_CATEGORIES),
+    category: z.preprocess(
+        (val) => (typeof val === 'string' ? val.toUpperCase() : val),
+        z.enum(EVENT_CATEGORIES)
+    ),
 });

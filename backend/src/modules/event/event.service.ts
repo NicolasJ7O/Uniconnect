@@ -42,7 +42,7 @@ export async function createEvent(organizerId: string, data: CreateEventInput) {
     });
 
     // Notify subscribers via Observer pattern
-    await eventSubject.notify('EVENT_CREATED', {
+    await eventSubject.notify('NUEVO_EVENTO', {
         eventId: event.id,
         title: event.title,
         category: event.category,

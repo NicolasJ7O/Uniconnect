@@ -1,15 +1,15 @@
 import { prisma } from '../../../lib/prisma.js';
 import { emitToUser } from '../../../lib/socket.js';
-import type { EventObserver, EventEvent } from './event.subject.js';
+import type { IObserver, EventoUniversidadEvent } from './event.subject.js';
 
-export class EventNotificationObserver implements EventObserver {
-  async update(event: EventEvent, data: any): Promise<void> {
-    if (event === 'EVENT_CREATED') {
-      await this.handleEventCreated(data);
+export class EventoNotificationObserver implements IObserver {
+  async update(event: EventoUniversidadEvent, data: any): Promise<void> {
+    if (event === 'NUEVO_EVENTO') {
+      await this.handleNuevoEvento(data);
     }
   }
 
-  private async handleEventCreated(data: {
+  private async handleNuevoEvento(data: {
     eventId: string;
     title: string;
     category: string;
@@ -17,18 +17,21 @@ export class EventNotificationObserver implements EventObserver {
   }) {
     const { eventId, title, category, organizerName } = data;
 
-    // Find all users subscribed to this category
+    // Normalizar la categoría a mayúsculas
+    const normalizedCategory = category.toUpperCase();
+
+    // Encontrar todos los usuarios suscritos a esta categoría específica
     const subscriptions = await prisma.eventSubscription.findMany({
-      where: { category },
+      where: { category: normalizedCategory },
       select: { userId: true },
     });
 
     if (subscriptions.length === 0) return;
 
-    const message = `Nuevo evento "${title}" en la categoría ${category} publicado por ${organizerName}`;
-    const metadata = { eventId, category, eventTitle: title };
+    const message = `Nuevo evento "${title}" en la categoría ${normalizedCategory} publicado por ${organizerName}`;
+    const metadata = { eventId, category: normalizedCategory, eventTitle: title };
 
-    // Create a notification for each subscriber and emit via WebSocket
+    // Crear una notificación y emitir vía WebSocket para cada suscriptor
     for (const sub of subscriptions) {
       const notif = await prisma.notification.create({
         data: {

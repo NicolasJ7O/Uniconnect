@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { getIO, emitToUser } from '../../lib/socket.js';
 import { AppError } from '../../errors/app-error.js';
 import { decorateMessage } from './decorators/message.decorator.js';
+import { chatSubject } from './observers/index.js';
 
 export class ChatService {
   async getGroupMessages(groupId: string, userId: string, page: number = 1, limit: number = 20) {
@@ -81,9 +82,11 @@ export class ChatService {
       },
     });
 
-    // Emit to group
-    const io = getIO();
-    io.to(`group-${groupId}`).emit('group-message', message);
+    // Notify observers (Observer Pattern)
+    chatSubject.notify('NUEVO_MENSAJE', {
+      isPrivate: false,
+      message
+    });
 
     // Notifications logic
     for (const member of group.members) {
@@ -187,10 +190,11 @@ export class ChatService {
       },
     });
 
-    const io = getIO();
-    // Emit to both users
-    io.to(`user-${receiverId}`).emit('private-message', message);
-    io.to(`user-${senderId}`).emit('private-message', message);
+    // Notify observers (Observer Pattern)
+    chatSubject.notify('NUEVO_MENSAJE', {
+      isPrivate: true,
+      message
+    });
 
     // Notification logic
     if (String(receiverId) !== String(senderId)) {

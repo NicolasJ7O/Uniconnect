@@ -1,40 +1,42 @@
-export type EventEvent = 'EVENT_CREATED';
+export type EventoUniversidadEvent = 'NUEVO_EVENTO';
 
-export interface EventObserver {
-  update(event: EventEvent, data: any): Promise<void>;
+export interface ISubject {
+  attach(observer: IObserver): void;
+  detach(observer: IObserver): void;
+  notify(event: EventoUniversidadEvent, data: any): Promise<void>;
 }
 
-export interface EventSubjectInterface {
-  attach(observer: EventObserver): void;
-  detach(observer: EventObserver): void;
-  notify(event: EventEvent, data: any): Promise<void>;
+export interface IObserver {
+  update(event: EventoUniversidadEvent, data: any): Promise<void>;
 }
 
-export class EventSubject implements EventSubjectInterface {
-  private observers: EventObserver[] = [];
-  private static instance: EventSubject;
+export class EventoUniversidadSubject implements ISubject {
+  private observers: IObserver[] = [];
+  private static instance: EventoUniversidadSubject;
 
   private constructor() {}
 
-  public static getInstance(): EventSubject {
-    if (!EventSubject.instance) {
-      EventSubject.instance = new EventSubject();
+  public static getInstance(): EventoUniversidadSubject {
+    if (!EventoUniversidadSubject.instance) {
+      EventoUniversidadSubject.instance = new EventoUniversidadSubject();
     }
-    return EventSubject.instance;
+    return EventoUniversidadSubject.instance;
   }
 
-  attach(observer: EventObserver): void {
+  attach(observer: IObserver): void {
     if (!this.observers.includes(observer)) {
       this.observers.push(observer);
     }
   }
 
-  detach(observer: EventObserver): void {
+  detach(observer: IObserver): void {
     const idx = this.observers.indexOf(observer);
-    if (idx !== -1) this.observers.splice(idx, 1);
+    if (idx !== -1) {
+      this.observers.splice(idx, 1);
+    }
   }
 
-  async notify(event: EventEvent, data: any): Promise<void> {
+  async notify(event: EventoUniversidadEvent, data: any): Promise<void> {
     for (const observer of this.observers) {
       await observer.update(event, data);
     }

@@ -37,3 +37,13 @@ export async function getAllSubjects(): Promise<Subject[]> {
     const response = await apiClient.get<Subject[]>('/student/subjects');
     return response.data;
 }
+
+export async function getStudentProfileById(userId: string): Promise<any> {
+    const response = await apiClient.get<any>(`/perfil/${userId}`);
+    return response.data;
+}
+
+export async function getEnrichedStudentProfile(userId: string): Promise<any> {
+    const response = await apiClient.get<any>(`/perfil/${userId}?vista=completa`);
+    return response.data;
+}

@@ -27,7 +27,7 @@ const allowedOrigins = new Set([
   'http://192.168.147.255:8081',
   'https://uniconnect-dashboard-little-morning-9182.fly.dev',
   'https://uniconnect-dashboard-little-morning-9182.fly.dev/auth/callback',
-  'com.ucaldas.estudiantes:/oauthredirect',
+  'com.ucaldas.estudiantes://oauthredirect',
   'https://uniconnect-dashboard-little-morning-9182.fly.dev/'
 ]);
 

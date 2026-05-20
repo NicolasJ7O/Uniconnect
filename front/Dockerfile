@@ -11,6 +11,9 @@ RUN npm ci
 # Copiar todo el código fuente
 COPY . .
 
+# Usar la configuración de producción para el compilado
+RUN cp .env.production .env
+
 # Al ser Expo Router, debemos hacer el export estático
 # NOTA: exporta el sitio web usando el runtime de Expo
 RUN npx expo export -p web

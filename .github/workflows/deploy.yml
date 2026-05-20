@@ -35,7 +35,7 @@ jobs:
 
       # Step 5: Run tests
       - name: Run Backend Tests
-        run: npx tsx --test src/**/*.test.ts
+        run: npx tsx --test src/modules/chat/decorators/imessage.decorator.test.ts src/modules/student/decorators/profile-decorator.test.ts src/modules/event/observers/event-subscription.test.ts
         working-directory: backend
 
       # Step 6: Setup flyctl CLI

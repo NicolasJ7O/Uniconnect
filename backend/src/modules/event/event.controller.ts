@@ -36,7 +36,15 @@ export const subscribeHandler = catchAsync(async (req: Request, res: Response) =
 
 export const unsubscribeHandler = catchAsync(async (req: Request, res: Response) => {
     const userId = req.user!.sub;
-    const category = req.params.category;
+    let category = req.params.category;
+    if (!category && req.body && req.body.category) {
+        const parsed = subscribeCategorySchema.parse(req.body);
+        category = parsed.category;
+    }
+    if (!category) {
+        res.status(400).json({ error: 'La categoría es requerida' });
+        return;
+    }
     await eventService.unsubscribeFromCategory(userId, category);
     res.json({ message: 'Suscripción cancelada' });
 });

@@ -1,0 +1,56 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  ci-cd:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Node.js environment
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      # Step 3: Install backend dependencies
+      - name: Install Backend Dependencies
+        run: npm ci
+        working-directory: backend
+
+      # Step 4: Generate Prisma Client
+      - name: Generate Prisma Client
+        run: npx prisma generate
+        working-directory: backend
+
+      # Step 5: Run tests
+      - name: Run Backend Tests
+        run: npx tsx --test src/**/*.test.ts
+        working-directory: backend
+
+      # Step 6: Setup flyctl CLI
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Step 7: Deploy Backend to Fly.io
+      - name: Deploy Backend to Fly.io
+        run: flyctl deploy --remote-only --config fly.toml --dockerfile Dockerfile
+        working-directory: backend
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # Step 8: Deploy Frontend to Fly.io
+      - name: Deploy Frontend to Fly.io
+        run: flyctl deploy --remote-only --config fly.toml --dockerfile Dockerfile
+        working-directory: front
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

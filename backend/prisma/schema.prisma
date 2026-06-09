@@ -42,6 +42,9 @@ model User {
   questionVotes   ForumQuestionVote[] @relation("UserQuestionVotes")
   answerVotes     ForumAnswerVote[]   @relation("UserAnswerVotes")
   forumLogs       ForumAuditLog[]     @relation("UserForumLogs")
+
+  academicResources AcademicResource[] @relation("UserAcademicResources")
+  resourceAuditLogs ResourceAuditLog[] @relation("UserResourceLogs")
 }
 
 model Subject {
@@ -55,8 +58,11 @@ model Subject {
   students User[] @relation("StudentSubjects")
   studyGroups StudyGroup[] @relation("SubjectGroups")
 
-  forumQuestions ForumQuestion[]
-  forumLogs      ForumAuditLog[]     @relation("SubjectForumLogs")
+  forumQuestions    ForumQuestion[]
+  forumLogs         ForumAuditLog[]      @relation("SubjectForumLogs")
+
+  academicResources AcademicResource[]   @relation("SubjectAcademicResources")
+  resourceAuditLogs ResourceAuditLog[]   @relation("SubjectResourceLogs")
 }
 
 model AuthIdentity {
@@ -312,4 +318,82 @@ model ForumAuditLog {
 
   user       User          @relation("UserForumLogs", fields: [userId], references: [id], onDelete: Cascade)
   subject    Subject       @relation("SubjectForumLogs", fields: [subjectId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// BIBLIOTECA COLABORATIVA DE RECURSOS ACADÉMICOS
+// ============================================================
+
+model AcademicResource {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  url         String?
+  type        String   @default("LINK") // LINK | PDF | VIDEO | DOCUMENTO | OTRO
+  authorId    String
+  subjectId   String
+  isDeleted   Boolean  @default(false)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author    User              @relation("UserAcademicResources", fields: [authorId], references: [id], onDelete: Cascade)
+  subject   Subject           @relation("SubjectAcademicResources", fields: [subjectId], references: [id], onDelete: Cascade)
+  openGraph ResourceOpenGraph?
+  tags      ResourceTagMap[]
+  stats     ResourceStats?
+  auditLogs ResourceAuditLog[]
+}
+
+model ResourceOpenGraph {
+  id          String   @id @default(cuid())
+  resourceId  String   @unique
+  ogTitle     String?
+  ogDescription String?
+  ogImage     String?
+  ogSiteName  String?
+  fetchedAt   DateTime @default(now())
+
+  resource AcademicResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+}
+
+model ResourceTag {
+  id    String           @id @default(cuid())
+  name  String           @unique
+  maps  ResourceTagMap[]
+}
+
+model ResourceTagMap {
+  resourceId String
+  tagId      String
+
+  resource AcademicResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  tag      ResourceTag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([resourceId, tagId])
+}
+
+model ResourceStats {
+  id          String   @id @default(cuid())
+  resourceId  String   @unique
+  views       Int      @default(0)
+  downloads   Int      @default(0)
+  votes       Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  resource AcademicResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+}
+
+model ResourceAuditLog {
+  id         String   @id @default(cuid())
+  resourceId String
+  userId     String
+  subjectId  String
+  action     String   // CREATE | UPDATE | DELETE | VOTE
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  resource AcademicResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  user     User             @relation("UserResourceLogs", fields: [userId], references: [id], onDelete: Cascade)
+  subject  Subject          @relation("SubjectResourceLogs", fields: [subjectId], references: [id], onDelete: Cascade)
 }

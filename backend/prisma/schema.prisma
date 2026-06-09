@@ -36,6 +36,12 @@ model User {
   transfersReceived OwnershipTransferRequest[] @relation("TransfersReceived")
   sentMessages      Message[] @relation("SentMessages")
   receivedMessages  Message[] @relation("ReceivedMessages")
+
+  forumQuestions  ForumQuestion[]     @relation("UserForumQuestions")
+  forumAnswers    ForumAnswer[]       @relation("UserForumAnswers")
+  questionVotes   ForumQuestionVote[] @relation("UserQuestionVotes")
+  answerVotes     ForumAnswerVote[]   @relation("UserAnswerVotes")
+  forumLogs       ForumAuditLog[]     @relation("UserForumLogs")
 }
 
 model Subject {
@@ -48,6 +54,9 @@ model Subject {
 
   students User[] @relation("StudentSubjects")
   studyGroups StudyGroup[] @relation("SubjectGroups")
+
+  forumQuestions ForumQuestion[]
+  forumLogs      ForumAuditLog[]     @relation("SubjectForumLogs")
 }
 
 model AuthIdentity {
@@ -233,4 +242,74 @@ model Message {
   sender    User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   receiver  User?       @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
   group     StudyGroup? @relation("GroupMessages", fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model ForumQuestion {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  subjectId String
+  authorId  String
+  score     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subject   Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  author    User                @relation("UserForumQuestions", fields: [authorId], references: [id], onDelete: Cascade)
+  answers   ForumAnswer[]
+  votes     ForumQuestionVote[]
+}
+
+model ForumAnswer {
+  id         String   @id @default(cuid())
+  content    String
+  questionId String
+  authorId   String
+  isAccepted Boolean  @default(false)
+  score      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  question ForumQuestion     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  author   User              @relation("UserForumAnswers", fields: [authorId], references: [id], onDelete: Cascade)
+  votes    ForumAnswerVote[]
+}
+
+model ForumQuestionVote {
+  id         String   @id @default(cuid())
+  userId     String
+  questionId String
+  value      Int      // 1 or -1
+  createdAt  DateTime @default(now())
+
+  user     User          @relation("UserQuestionVotes", fields: [userId], references: [id], onDelete: Cascade)
+  question ForumQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+}
+
+model ForumAnswerVote {
+  id        String   @id @default(cuid())
+  userId    String
+  answerId  String
+  value     Int      // 1 or -1
+  createdAt DateTime @default(now())
+
+  user   User        @relation("UserAnswerVotes", fields: [userId], references: [id], onDelete: Cascade)
+  answer ForumAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, answerId])
+}
+
+model ForumAuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String   // CREATE_QUESTION, UPDATE_QUESTION, CREATE_ANSWER, VOTE_QUESTION, VOTE_ANSWER, ACCEPT_ANSWER
+  subjectId  String
+  targetId   String   // ID of question or answer
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user       User          @relation("UserForumLogs", fields: [userId], references: [id], onDelete: Cascade)
+  subject    Subject       @relation("SubjectForumLogs", fields: [subjectId], references: [id], onDelete: Cascade)
 }

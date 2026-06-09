@@ -7,6 +7,7 @@ import morgan from 'morgan';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { studentRouter } from './modules/student/student.routes.js';
 import { studyGroupRouter } from './modules/study-group/study-group.routes.js';
+import { forumRouter } from './modules/forum/forum.routes.js';
 import { env } from './config/env.js';
 import { checkDbConnection, prisma } from './lib/prisma.js';
 import { AppError } from './errors/app-error.js';
@@ -84,6 +85,7 @@ app.get('/health/db', async (_req, res) => {
 app.use('/auth', authRouter);
 app.use('/student', studentRouter);
 app.use('/groups', studyGroupRouter);
+app.use('/forum', forumRouter);
 
 import { getProfileByIdHandler } from './modules/student/student.controller.js';
 import { requireAuth } from './modules/auth/auth.middleware.js';

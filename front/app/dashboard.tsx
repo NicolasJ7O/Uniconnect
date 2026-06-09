@@ -112,24 +112,35 @@ export default function DashboardScreen() {
             <Text style={styles.cardText}>Carrera: {profile.career || 'No especificada'}</Text>
             <Text style={styles.cardText}>Semestre: {profile.currentSemester || 'No especificado'}</Text>
 
-            <Text style={[styles.cardTitle, { marginTop: 12 }]}>Foros por Asignatura:</Text>
+            <Text style={[styles.cardTitle, { marginTop: 12 }]}>Mis Asignaturas (Foro y Biblioteca):</Text>
             {profile.subjects.length > 0 ? (
-              <View style={styles.subjectTags}>
+              <View style={{ gap: 8 }}>
                 {profile.subjects.map(s => (
-                  <Pressable
-                    key={s.id}
-                    style={({ pressed }) => [
-                      styles.subjectBadge,
-                      pressed && styles.subjectBadgePressed
-                    ]}
-                    onPress={() => router.push({
-                      pathname: '/subject-forum' as any,
-                      params: { subjectId: s.id, subjectName: s.name }
-                    })}
-                  >
-                    <Ionicons name="chatbubbles-outline" size={14} color="#0a7ea4" style={{ marginRight: 4 }} />
-                    <Text style={styles.subjectBadgeText}>{s.name}</Text>
-                  </Pressable>
+                  <View key={s.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: 8, borderRadius: 8 }}>
+                    <Text style={{ flex: 1, fontSize: 13, color: '#334155', fontWeight: '600' }} numberOfLines={2}>{s.name}</Text>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Pressable
+                        style={({ pressed }) => [styles.subjectBadge, pressed && styles.subjectBadgePressed, { margin: 0, paddingHorizontal: 8 }]}
+                        onPress={() => router.push({
+                          pathname: '/subject-forum' as any,
+                          params: { subjectId: s.id, subjectName: s.name }
+                        })}
+                      >
+                        <Ionicons name="chatbubbles-outline" size={14} color="#0a7ea4" style={{ marginRight: 4 }} />
+                        <Text style={styles.subjectBadgeText}>Foro</Text>
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [styles.subjectBadge, pressed && styles.subjectBadgePressed, { margin: 0, paddingHorizontal: 8 }]}
+                        onPress={() => router.push({
+                          pathname: '/subject-library' as any,
+                          params: { subjectId: s.id, subjectName: s.name }
+                        })}
+                      >
+                        <Ionicons name="library-outline" size={14} color="#0a7ea4" style={{ marginRight: 4 }} />
+                        <Text style={styles.subjectBadgeText}>Biblioteca</Text>
+                      </Pressable>
+                    </View>
+                  </View>
                 ))}
               </View>
             ) : (

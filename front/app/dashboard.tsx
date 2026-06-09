@@ -6,6 +6,7 @@ import { getStudentProfile, getEnrichedStudentProfile, type StudentProfile } fro
 import { chatApi, type Conversation } from '@/lib/chat-api';
 import { logoutWithRefreshToken } from '@/lib/auth-api';
 import { useNotifications } from '@/context/NotificationContext';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function DashboardScreen() {
   const [session, setSession] = useState<SessionData | null>(null);
@@ -111,13 +112,24 @@ export default function DashboardScreen() {
             <Text style={styles.cardText}>Carrera: {profile.career || 'No especificada'}</Text>
             <Text style={styles.cardText}>Semestre: {profile.currentSemester || 'No especificado'}</Text>
 
-            <Text style={[styles.cardTitle, { marginTop: 12 }]}>Materias inscritas:</Text>
+            <Text style={[styles.cardTitle, { marginTop: 12 }]}>Foros por Asignatura:</Text>
             {profile.subjects.length > 0 ? (
               <View style={styles.subjectTags}>
                 {profile.subjects.map(s => (
-                  <View key={s.id} style={styles.badge}>
-                    <Text style={styles.badgeText}>{s.name}</Text>
-                  </View>
+                  <Pressable
+                    key={s.id}
+                    style={({ pressed }) => [
+                      styles.subjectBadge,
+                      pressed && styles.subjectBadgePressed
+                    ]}
+                    onPress={() => router.push({
+                      pathname: '/subject-forum' as any,
+                      params: { subjectId: s.id, subjectName: s.name }
+                    })}
+                  >
+                    <Ionicons name="chatbubbles-outline" size={14} color="#0a7ea4" style={{ marginRight: 4 }} />
+                    <Text style={styles.subjectBadgeText}>{s.name}</Text>
+                  </Pressable>
                 ))}
               </View>
             ) : (
@@ -417,5 +429,24 @@ const styles = StyleSheet.create({
     color: '#166534',
     marginTop: 2,
     textAlign: 'center',
+  },
+  subjectBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f9ff',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    margin: 3,
+  },
+  subjectBadgePressed: {
+    backgroundColor: '#e0f2fe',
+  },
+  subjectBadgeText: {
+    fontSize: 13,
+    color: '#0369a1',
+    fontWeight: '600',
   },
 });

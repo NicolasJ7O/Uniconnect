@@ -58,12 +58,11 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "7c8d0a50-5ead-4990-b353-813fecfdb1d9"
+        "projectId": "c9c4c6d0-7680-4011-b4d3-214acb3a387d"
       }
     },
-    "owner": "julianamorenot05",
+    "owner": "nicojo",
     "updates": {
-      "url": "https://u.expo.dev/7c8d0a50-5ead-4990-b353-813fecfdb1d9",
       "fallbackToCacheTimeout": 0,
       "checkAutomatically": "ON_LOAD"
     }

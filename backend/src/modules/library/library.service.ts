@@ -9,7 +9,7 @@ import { extractOpenGraph } from './og-extractor.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ResourceType = 'LINK' | 'PDF' | 'VIDEO' | 'DOCUMENTO' | 'OTRO';
+export type ResourceType = 'LINK' | 'PDF' | 'IMAGE' | 'VIDEO' | 'DOCUMENTO' | 'OTRO';
 export type SortBy = 'recent' | 'popular';
 
 export interface ListResourcesOptions {
@@ -28,6 +28,7 @@ export interface CreateResourceDto {
   url?: string;
   type: ResourceType;
   tags?: string[];
+  categories?: string[];
   subjectId: string;
   authorId: string;
 }
@@ -38,12 +39,14 @@ export interface UpdateResourceDto {
   url?: string;
   type?: ResourceType;
   tags?: string[];
+  categories?: string[];
 }
 
 // ─── Internal DB shape helper ─────────────────────────────────────────────────
 
 const resourceInclude = {
   author: { select: { id: true, name: true, avatarUrl: true } },
+  subject: { select: { id: true, name: true, code: true } },
   openGraph: true,
   tags: { include: { tag: { select: { name: true } } } },
   stats: true,
@@ -51,6 +54,7 @@ const resourceInclude = {
 
 type RawResource = Awaited<ReturnType<typeof prisma.academicResource.findUniqueOrThrow>> & {
   author: { id: string; name: string | null; avatarUrl: string | null };
+  subject: { id: string; name: string; code: string | null };
   openGraph: {
     ogTitle: string | null;
     ogDescription: string | null;
@@ -69,6 +73,16 @@ type RawResource = Awaited<ReturnType<typeof prisma.academicResource.findUniqueO
  */
 export function assembleDecorated(raw: RawResource): RecursoInfo {
   let recurso = new RecursoBase(raw);
+  const normalizedTags = Array.from(
+    new Set(raw.tags.map((t) => t.tag.name).map((tag) => tag.trim()).filter(Boolean)),
+  );
+  const normalizedCategories = Array.from(
+    new Set(
+      [raw.subject.name, raw.subject.code, raw.type]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
 
   // Decorator 1 – Open Graph preview (only if OG data exists)
   const ogDecorated = new RecursoConPreviewOpenGraph(
@@ -84,8 +98,7 @@ export function assembleDecorated(raw: RawResource): RecursoInfo {
   );
 
   // Decorator 2 – Tags
-  const tagNames = raw.tags.map((t) => t.tag.name);
-  const tagDecorated = new RecursoConEtiquetas(ogDecorated, tagNames);
+  const tagDecorated = new RecursoConEtiquetas(ogDecorated, normalizedTags, normalizedCategories);
 
   // Decorator 3 – Stats
   const statsDecorated = new RecursoConEstadisticas(
@@ -182,15 +195,21 @@ export async function getResourceById(id: string): Promise<RecursoInfo> {
 }
 
 export async function createResource(dto: CreateResourceDto): Promise<RecursoInfo> {
-  const { tags = [], ...rest } = dto;
+  const { tags = [], categories = [], ...rest } = dto;
+  const normalizedTags = Array.from(
+    new Set(tags.map((name) => name.toLowerCase().trim()).filter(Boolean)),
+  );
+  const normalizedCategories = Array.from(
+    new Set(categories.map((name) => name.toLowerCase().trim()).filter(Boolean)),
+  );
 
   return await prisma.$transaction(async (tx) => {
     // Upsert tags
     const tagRecords = await Promise.all(
-      tags.map((name) =>
+      normalizedTags.map((name) =>
         tx.resourceTag.upsert({
-          where: { name: name.toLowerCase().trim() },
-          create: { name: name.toLowerCase().trim() },
+          where: { name },
+          create: { name },
           update: {},
         }),
       ),
@@ -219,7 +238,7 @@ export async function createResource(dto: CreateResourceDto): Promise<RecursoInf
         userId: rest.authorId,
         subjectId: rest.subjectId,
         action: 'CREATE',
-        metadata: { type: rest.type },
+        metadata: { type: rest.type, categories: normalizedCategories },
       },
     });
 
@@ -252,7 +271,7 @@ export async function updateResource(
   authorId: string,
   dto: UpdateResourceDto,
 ): Promise<RecursoInfo> {
-  const { tags, ...rest } = dto;
+  const { tags, categories: _categories, ...rest } = dto;
 
   return await prisma.$transaction(async (tx) => {
     // Handle tag replacement

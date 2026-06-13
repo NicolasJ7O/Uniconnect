@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { emitToUser } from '../../lib/socket.js';
 import {
   NotificacionBase,
   NotificacionConPrioridad,
@@ -72,4 +73,24 @@ export async function deleteNotification(notificationId: string, userId: string)
     return prisma.notification.delete({
         where: { id: notificationId, userId }
     });
+}
+
+export async function createSystemNotification(input: {
+  userId: string;
+  type: string;
+  message: string;
+  metadata?: Record<string, any>;
+}) {
+  const notification = await prisma.notification.create({
+    data: {
+      userId: input.userId,
+      type: input.type,
+      message: input.message,
+      metadata: input.metadata ?? {},
+    },
+  });
+
+  const decorated = decorateNotification(notification);
+  emitToUser(input.userId, 'new-notification', decorated);
+  return decorated;
 }

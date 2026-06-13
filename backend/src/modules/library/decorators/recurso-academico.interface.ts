@@ -25,6 +25,11 @@ export interface RecursoInfo {
   type: string;
   authorId: string;
   subjectId: string;
+  subject: {
+    id: string;
+    name: string;
+    code: string | null;
+  };
   publishedAt: string;
   createdAt: string;
   author: { id: string; name: string | null; avatarUrl: string | null };
@@ -32,6 +37,7 @@ export interface RecursoInfo {
   // Decorator extensions (undefined if decorator not applied)
   openGraph?: OGPreview | null;
   tags?: string[];
+  categories?: string[];
   stats?: ResourceStatsInfo | null;
 }
 

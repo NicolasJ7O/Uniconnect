@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../auth/auth.middleware.js';
+import { uploadResourceFile } from '../../middlewares/upload.js';
 import {
   listResourcesHandler,
   getResourceHandler,
@@ -15,7 +16,7 @@ libraryRouter.use(requireAuth);
 
 // List / create resources for a subject
 libraryRouter.get('/subjects/:subjectId/resources', listResourcesHandler);
-libraryRouter.post('/subjects/:subjectId/resources', createResourceHandler);
+libraryRouter.post('/subjects/:subjectId/resources', uploadResourceFile.single('file'), createResourceHandler);
 
 // Individual resource operations
 libraryRouter.get('/resources/:resourceId', getResourceHandler);

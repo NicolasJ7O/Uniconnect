@@ -21,16 +21,70 @@ const storage = multer.diskStorage({
     }
 });
 
+const COMMON_DOCUMENT_MIME_TYPES = new Set([
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain',
+    'text/markdown',
+    'application/rtf',
+]);
+
+const COMMON_DOCUMENT_EXTENSIONS = new Set([
+    '.pdf',
+    '.doc',
+    '.docx',
+    '.xls',
+    '.xlsx',
+    '.ppt',
+    '.pptx',
+    '.txt',
+    '.md',
+    '.rtf',
+]);
+
+function isAllowedResourceFile(file: Express.Multer.File): boolean {
+    const ext = path.extname(file.originalname).toLowerCase();
+    return (
+        file.mimetype === 'application/pdf' ||
+        file.mimetype.startsWith('image/') ||
+        file.mimetype.startsWith('video/') ||
+        COMMON_DOCUMENT_MIME_TYPES.has(file.mimetype) ||
+        COMMON_DOCUMENT_EXTENSIONS.has(ext) ||
+        (file.mimetype === 'application/octet-stream' && COMMON_DOCUMENT_EXTENSIONS.has(ext))
+    );
+}
+
 export const uploadPDF = multer({
     storage,
     limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB limit
+        fileSize: 15 * 1024 * 1024,
     },
-    fileFilter: (req, file, cb) => {
+    fileFilter: (_req, file, cb) => {
         if (file.mimetype === 'application/pdf') {
             cb(null, true);
-        } else {
-            cb(new AppError(400, 'Solo se permiten archivos PDF'));
+            return;
         }
-    }
+
+        cb(new AppError(400, 'Solo se permiten archivos PDF'));
+    },
+});
+
+export const uploadResourceFile = multer({
+    storage,
+    limits: {
+        fileSize: 50 * 1024 * 1024,
+    },
+    fileFilter: (_req, file, cb) => {
+        if (isAllowedResourceFile(file)) {
+            cb(null, true);
+            return;
+        }
+
+        cb(new AppError(400, 'Solo se permiten archivos PDF, documentos, imágenes o videos'));
+    },
 });

@@ -1,6 +1,6 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, ScrollView, Modal, FlatList, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
 import { clearSession, loadSession, type SessionData } from '@/lib/session';
 import { getStudentProfile, getEnrichedStudentProfile, type StudentProfile } from '@/lib/student-api';
 import { chatApi, type Conversation } from '@/lib/chat-api';
@@ -49,7 +49,7 @@ export default function DashboardScreen() {
       }
 
       void hydrateSession();
-    }, [])
+    }, [reconnectSocket])
   );
 
   async function handleLogout() {
@@ -206,6 +206,16 @@ export default function DashboardScreen() {
         <Text style={styles.cardText}>Explora eventos, fíltralos por categoría y suscríbete a notificaciones.</Text>
         <Pressable style={[styles.actionButton, { backgroundColor: '#0284c7', borderColor: '#bae6fd' }]} onPress={() => router.push('/events')}>
           <Text style={styles.actionButtonLabel}>Explorar Eventos</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Sesiones de Estudio</Text>
+        </View>
+        <Text style={styles.cardText}>Programa bloques recurrentes y sincronízalos entre web y móvil.</Text>
+        <Pressable style={[styles.actionButton, { backgroundColor: '#0a7ea4', borderColor: '#c4f1f9' }]} onPress={() => router.push('/study-sessions' as any)}>
+          <Text style={styles.actionButtonLabel}>Gestionar Sesiones</Text>
         </Pressable>
       </View>
 

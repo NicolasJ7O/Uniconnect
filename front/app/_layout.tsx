@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack, router } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Image, View, Pressable, Text, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
@@ -89,6 +89,7 @@ export default function RootLayout() {
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="profile-edit" options={{ title: 'Editar Perfil' }} />
               <Stack.Screen name="events" options={{ title: 'Eventos Universitarios' }} />
+              <Stack.Screen name="study-sessions" options={{ title: 'Sesiones de Estudio' }} />
             </Stack>
             <StatusBar style="auto" />
             <NotificationModal />

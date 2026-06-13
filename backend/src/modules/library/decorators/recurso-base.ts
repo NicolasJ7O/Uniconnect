@@ -13,6 +13,7 @@ export class RecursoBase implements RecursoAcademico {
     type: string;
     authorId: string;
     subjectId: string;
+    subject: { id: string; name: string; code: string | null };
     publishedAt: Date;
     createdAt: Date;
     author: { id: string; name: string | null; avatarUrl: string | null };
@@ -27,6 +28,7 @@ export class RecursoBase implements RecursoAcademico {
       type: this.resource.type,
       authorId: this.resource.authorId,
       subjectId: this.resource.subjectId,
+      subject: this.resource.subject,
       publishedAt: this.resource.publishedAt.toISOString(),
       createdAt: this.resource.createdAt.toISOString(),
       author: this.resource.author,

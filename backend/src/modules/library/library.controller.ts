@@ -82,21 +82,46 @@ export const getResourceHandler = catchAsync(async (req: Request, res: Response)
 
 export const createResourceHandler = catchAsync(async (req: Request, res: Response) => {
   const { subjectId } = req.params;
-  const { title, description, url, type, tags } = req.body;
   const payload = req.user!;
   const userId = await resolveDbUserId(payload.sub, payload.email);
 
+  await runLibraryCoR({ userId, subjectId, action: 'PUBLISH' });
+
+  let { title, description, url, type, tags, categories } = req.body;
+  const reqAny = req as any;
+
+  if (reqAny.file) {
+    url = `/uploads/groups/${reqAny.file.filename}`;
+  }
+
+  // Si tags viene como un string (desde formdata separadas por como), se convierte a array
+  let parsedTags: string[] = [];
+  if (typeof tags === 'string') {
+    parsedTags = tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+  } else if (Array.isArray(tags)) {
+    parsedTags = tags;
+  }
+
+  let parsedCategories: string[] = [];
+  if (typeof categories === 'string') {
+    parsedCategories = categories.split(',').map((item: string) => item.trim()).filter(Boolean);
+  } else if (Array.isArray(categories)) {
+    parsedCategories = categories;
+  }
+
   if (!title?.trim()) throw new AppError(400, 'El título es requerido');
   if (!type) throw new AppError(400, 'El tipo de recurso es requerido');
-
-  await runLibraryCoR({ userId, subjectId, action: 'PUBLISH' });
+  if (['PDF', 'VIDEO', 'DOCUMENTO', 'IMAGE'].includes(type) && !reqAny.file && !String(url ?? '').trim()) {
+    throw new AppError(400, 'Debes adjuntar un archivo o un enlace para este tipo de recurso');
+  }
 
   const result = await createResource({
     title,
     description,
     url,
     type,
-    tags: Array.isArray(tags) ? tags : [],
+    tags: parsedTags,
+    categories: parsedCategories,
     subjectId,
     authorId: userId,
   });

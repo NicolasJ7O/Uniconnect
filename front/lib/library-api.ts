@@ -2,12 +2,18 @@ import apiClient from './api-client';
 
 // ─── Shared types (mirror backend RecursoInfo) ───────────────────────────────
 
-export type ResourceType = 'LINK' | 'PDF' | 'VIDEO' | 'DOCUMENTO' | 'OTRO';
+export type ResourceType = 'LINK' | 'PDF' | 'IMAGE' | 'VIDEO' | 'DOCUMENTO' | 'OTRO';
 
 export type UserMin = {
   id: string;
   name: string | null;
   avatarUrl: string | null;
+};
+
+export type SubjectMin = {
+  id: string;
+  name: string;
+  code: string | null;
 };
 
 export type OGPreview = {
@@ -31,12 +37,14 @@ export type AcademicResource = {
   type: ResourceType;
   authorId: string;
   subjectId: string;
+  subject: SubjectMin;
   publishedAt: string;
   createdAt: string;
   author: UserMin;
   // Decorator fields
   openGraph?: OGPreview | null;
   tags?: string[];
+  categories?: string[];
   stats?: ResourceStatsInfo | null;
 };
 
@@ -65,6 +73,7 @@ export type CreateResourcePayload = {
   url?: string;
   type: ResourceType;
   tags?: string[];
+  categories?: string[];
 };
 
 export type UpdateResourcePayload = {
@@ -73,7 +82,38 @@ export type UpdateResourcePayload = {
   url?: string;
   type?: ResourceType;
   tags?: string[];
+  categories?: string[];
 };
+
+export type ResourceAttachment = {
+  uri?: string;
+  mimeType?: string;
+  name?: string;
+  fileName?: string;
+  file?: File | Blob;
+  type?: string;
+};
+
+function appendAttachment(formData: FormData, attachment: ResourceAttachment) {
+  if (attachment.file) {
+    formData.append(
+      'file',
+      attachment.file as any,
+      attachment.name || attachment.fileName || 'file',
+    );
+    return;
+  }
+
+  if (!attachment.uri) {
+    return;
+  }
+
+  formData.append('file', {
+    uri: attachment.uri,
+    type: attachment.mimeType || attachment.type || 'application/octet-stream',
+    name: attachment.name || attachment.fileName || `file_${Date.now()}`,
+  } as any);
+}
 
 // ─── API client ───────────────────────────────────────────────────────────────
 
@@ -97,10 +137,33 @@ export const libraryApi = {
   createResource: async (
     subjectId: string,
     payload: CreateResourcePayload,
+    attachment?: ResourceAttachment,
   ): Promise<AcademicResource> => {
+    let dataOrForm: any;
+    let headers = {};
+
+    if (attachment) {
+      const formData = new FormData();
+      formData.append('title', payload.title);
+      formData.append('type', payload.type);
+      if (payload.description) formData.append('description', payload.description);
+      if (payload.tags && payload.tags.length > 0) {
+        formData.append('tags', payload.tags.join(','));
+      }
+      if (payload.categories && payload.categories.length > 0) {
+        formData.append('categories', payload.categories.join(','));
+      }
+      appendAttachment(formData, attachment);
+      dataOrForm = formData;
+      headers = { 'Content-Type': 'multipart/form-data' };
+    } else {
+      dataOrForm = payload;
+    }
+
     const response = await apiClient.post<AcademicResource>(
       `/library/subjects/${subjectId}/resources`,
-      payload,
+      dataOrForm,
+      { headers }
     );
     return response.data;
   },

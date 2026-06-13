@@ -7,6 +7,7 @@ export interface Notification {
   message: string;
   isRead: boolean;
   createdAt: string;
+  metadata?: Record<string, any> | null;
 }
 
 export const notificationApi = {

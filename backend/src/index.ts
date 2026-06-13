@@ -102,6 +102,9 @@ app.use('/chat', chatRouter);
 import { eventRouter } from './modules/event/event.routes.js';
 app.use('/events', eventRouter);
 app.use('/eventos', eventRouter);
+import { studySessionRouter } from './modules/study-session/study-session.routes.js';
+app.use('/study-sessions', studySessionRouter);
+app.use('/sesiones-estudio', studySessionRouter);
 
 // Global Error Handler
 app.use(errorHandler);
@@ -111,6 +114,8 @@ async function bootstrap() {
     await prisma.$connect();
     isDatabaseConnected = true;
     console.log('Database connection: OK');
+    const { startStudySessionScheduler } = await import('./modules/study-session/study-session.scheduler.js');
+    startStudySessionScheduler();
 
     httpServer.listen(port, '0.0.0.0', () => {
       console.log(`API running on http://0.0.0.0:${port}`);

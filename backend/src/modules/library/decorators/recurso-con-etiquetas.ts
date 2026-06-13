@@ -8,6 +8,7 @@ export class RecursoConEtiquetas implements RecursoAcademico {
   constructor(
     private readonly wrapped: RecursoAcademico,
     private readonly tags: string[],
+    private readonly categories: string[] = [],
   ) {}
 
   getInfo(): RecursoInfo {
@@ -15,6 +16,7 @@ export class RecursoConEtiquetas implements RecursoAcademico {
     return {
       ...base,
       tags: this.tags,
+      categories: this.categories,
     };
   }
 }

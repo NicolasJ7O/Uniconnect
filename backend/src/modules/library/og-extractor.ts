@@ -2,6 +2,38 @@ import type { OGPreview } from './decorators/recurso-academico.interface.js';
 
 const OG_FETCH_TIMEOUT_MS = 4000;
 
+function isSafeHttpUrl(candidate: string): boolean {
+  try {
+    const parsedUrl = new URL(candidate);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return false;
+    }
+
+    const hostname = parsedUrl.hostname.toLowerCase();
+    if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
+      return false;
+    }
+
+    if (hostname === '127.0.0.1' || hostname === '::1') {
+      return false;
+    }
+
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+      const octets = hostname.split('.').map((value) => Number(value));
+      const [first, second] = octets;
+      if (first === 10) return false;
+      if (first === 127) return false;
+      if (first === 169 && second === 254) return false;
+      if (first === 192 && second === 168) return false;
+      if (first === 172 && second >= 16 && second <= 31) return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Extracts Open Graph metadata from an external URL using native fetch.
  * Uses a basic regex parser to avoid heavy HTML dependencies.
@@ -12,11 +44,16 @@ const OG_FETCH_TIMEOUT_MS = 4000;
  */
 export async function extractOpenGraph(url: string): Promise<OGPreview | null> {
   try {
+    if (!isSafeHttpUrl(url)) {
+      return null;
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), OG_FETCH_TIMEOUT_MS);
 
     const response = await fetch(url, {
       signal: controller.signal,
+      redirect: 'error',
       headers: {
         'User-Agent': 'UniConnect-OG-Bot/1.0',
         Accept: 'text/html',

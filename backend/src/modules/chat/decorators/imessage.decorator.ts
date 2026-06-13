@@ -4,6 +4,24 @@ export interface IMensaje {
   render(): string;
 }
 
+export type EstadoEncuesta = 'activa' | 'cerrada';
+
+export interface OpcionEncuesta {
+  id: string;
+  texto: string;
+  votos: string[];
+}
+
+export interface ConfiguracionEncuesta {
+  pregunta: string;
+  opciones: Array<string | { id?: string; texto: string; votos?: string[] }>;
+  usuariosParticipantes?: string[];
+  fechaCierre?: Date | string | null;
+  estado?: EstadoEncuesta;
+  votoMultiple?: boolean;
+  maxSeleccion?: number;
+}
+
 export class MensajeBase implements IMensaje {
   constructor(
     private contenido: string,
@@ -40,6 +58,166 @@ export abstract class MessageDecorator implements IMensaje {
 
   render(): string {
     return this.mensaje.render();
+  }
+}
+
+export class MensajeConEncuesta extends MessageDecorator {
+  private pregunta: string;
+  private opciones: OpcionEncuesta[];
+  private usuariosParticipantes: Set<string>;
+  private fechaCierre: Date | null;
+  private estado: EstadoEncuesta;
+  private votoMultiple: boolean;
+  private maxSeleccion: number;
+
+  constructor(mensaje: IMensaje, encuesta: ConfiguracionEncuesta) {
+    super(mensaje);
+
+    const opcionesNormalizadas = encuesta.opciones.map((opcion, index) => {
+      if (typeof opcion === 'string') {
+        return {
+          id: `opcion-${index + 1}`,
+          texto: opcion.trim(),
+          votos: [] as string[],
+        };
+      }
+
+      return {
+        id: opcion.id?.trim() || `opcion-${index + 1}`,
+        texto: opcion.texto.trim(),
+        votos: Array.from(new Set((opcion.votos || []).filter(Boolean))),
+      };
+    });
+
+    if (opcionesNormalizadas.length < 2 || opcionesNormalizadas.length > 10) {
+      throw new Error('La encuesta debe tener entre 2 y 10 opciones');
+    }
+
+    if (!encuesta.pregunta?.trim()) {
+      throw new Error('La encuesta debe tener una pregunta válida');
+    }
+
+    this.pregunta = encuesta.pregunta.trim();
+    this.opciones = opcionesNormalizadas;
+    this.usuariosParticipantes = new Set((encuesta.usuariosParticipantes || []).filter(Boolean));
+    this.fechaCierre = encuesta.fechaCierre ? new Date(encuesta.fechaCierre) : null;
+    this.estado = encuesta.estado || 'activa';
+    this.votoMultiple = Boolean(encuesta.votoMultiple);
+    this.maxSeleccion = Math.max(1, encuesta.maxSeleccion || 1);
+
+    if (!this.votoMultiple) {
+      this.maxSeleccion = 1;
+    }
+
+    if (this.maxSeleccion > this.opciones.length) {
+      this.maxSeleccion = this.opciones.length;
+    }
+  }
+
+  private getVotosUsuario(userId: string) {
+    return this.opciones.filter((opcion) => opcion.votos.includes(userId)).map((opcion) => opcion.id);
+  }
+
+  private getTotalVotos() {
+    return this.opciones.reduce((acc, opcion) => acc + opcion.votos.length, 0);
+  }
+
+  registrarVoto(userId: string, opcionId: string): void {
+    if (this.estado === 'cerrada') {
+      throw new Error('No se puede votar en una encuesta cerrada');
+    }
+
+    if (this.fechaCierre && this.fechaCierre.getTime() <= Date.now()) {
+      this.cerrarEncuesta();
+      throw new Error('La encuesta ya expiró y no admite nuevos votos');
+    }
+
+    const opcion = this.opciones.find((item) => item.id === opcionId);
+    if (!opcion) {
+      throw new Error('La opción seleccionada no existe');
+    }
+
+    const votosPrevios = this.getVotosUsuario(userId);
+    if (votosPrevios.includes(opcionId)) {
+      throw new Error('No puedes votar dos veces en la misma opción');
+    }
+
+    if (!this.votoMultiple && votosPrevios.length > 0) {
+      throw new Error('Esta encuesta permite un solo voto por usuario');
+    }
+
+    if (this.votoMultiple && votosPrevios.length >= this.maxSeleccion) {
+      throw new Error(`Esta encuesta permite hasta ${this.maxSeleccion} opciones por usuario`);
+    }
+
+    opcion.votos.push(userId);
+    this.usuariosParticipantes.add(userId);
+  }
+
+  cerrarEncuesta(): void {
+    this.estado = 'cerrada';
+    if (!this.fechaCierre) {
+      this.fechaCierre = new Date();
+    }
+  }
+
+  obtenerResultados() {
+    const totalVotos = this.getTotalVotos();
+
+    return this.opciones.map((opcion) => {
+      const votos = opcion.votos.length;
+      const porcentaje = totalVotos === 0 ? 0 : Number(((votos / totalVotos) * 100).toFixed(2));
+
+      return {
+        id: opcion.id,
+        texto: opcion.texto,
+        votos,
+        porcentaje,
+        usuarios: [...opcion.votos],
+      };
+    });
+  }
+
+  override getMetadata(): Record<string, any> {
+    return {
+      ...super.getMetadata(),
+      encuesta: {
+        pregunta: this.pregunta,
+        opciones: this.opciones.map((opcion) => ({
+          id: opcion.id,
+          texto: opcion.texto,
+          votos: [...opcion.votos],
+        })),
+        votosPorOpcion: this.obtenerResultados(),
+        usuariosParticipantes: [...this.usuariosParticipantes],
+        fechaCierre: this.fechaCierre?.toISOString() ?? null,
+        estado: this.estado,
+        votoMultiple: this.votoMultiple,
+        maxSeleccion: this.maxSeleccion,
+        totalVotos: this.getTotalVotos(),
+      },
+    };
+  }
+
+  override render(): string {
+    const baseRender = super.render();
+    const resultados = this.obtenerResultados();
+    const estadoLabel = this.estado === 'cerrada' ? 'Cerrada' : 'Activa';
+    const cierreLabel = this.fechaCierre
+      ? this.fechaCierre.toLocaleString('es-CO', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        })
+      : 'Sin cierre programado';
+
+    const opcionesHtml = resultados
+      .map(
+        (opcion) =>
+          `<div class="encuesta-opcion" data-option-id="${opcion.id}" data-votes="${opcion.votos}" data-percentage="${opcion.porcentaje}"><strong>${opcion.texto}</strong> <span>${opcion.votos} votos (${opcion.porcentaje}%)</span></div>`
+      )
+      .join('');
+
+    return `${baseRender}\n<div class="encuesta-container" data-status="${this.estado}" data-multiple="${this.votoMultiple}" data-max-selections="${this.maxSeleccion}"><div class="encuesta-header"><span class="encuesta-estado">${estadoLabel}</span><span class="encuesta-cierre">${cierreLabel}</span></div><p class="encuesta-pregunta">${this.pregunta}</p>${opcionesHtml}</div>`;
   }
 }
 

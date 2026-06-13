@@ -36,6 +36,8 @@ model User {
   transfersReceived OwnershipTransferRequest[] @relation("TransfersReceived")
   sentMessages      Message[] @relation("SentMessages")
   receivedMessages  Message[] @relation("ReceivedMessages")
+  pollsCreated      Poll[] @relation("PollsCreated")
+  pollVotesCast     PollVote[] @relation("PollVotesCast")
 
   forumQuestions  ForumQuestion[]     @relation("UserForumQuestions")
   forumAnswers    ForumAnswer[]       @relation("UserForumAnswers")
@@ -117,6 +119,7 @@ model StudyGroup {
   posts    Post[]              @relation("GroupPosts")
   ownershipTransfers OwnershipTransferRequest[]
   messages Message[]           @relation("GroupMessages")
+  polls    Poll[]
 }
 
 model StudyGroupResource {
@@ -253,6 +256,65 @@ model Message {
   sender    User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   receiver  User?       @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
   group     StudyGroup? @relation("GroupMessages", fields: [groupId], references: [id], onDelete: Cascade)
+  poll      Poll?
+}
+
+enum PollStatus {
+  ACTIVE
+  CLOSED
+}
+
+model Poll {
+  id              String     @id @default(cuid())
+  messageId       String     @unique
+  groupId         String
+  creatorId       String
+  question        String
+  allowMultiple   Boolean    @default(false)
+  maxSelections   Int        @default(1)
+  closingAt       DateTime?
+  closedAt        DateTime?
+  status          PollStatus @default(ACTIVE)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  message Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  group   StudyGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  creator User        @relation("PollsCreated", fields: [creatorId], references: [id], onDelete: Cascade)
+  options PollOption[]
+  votes   PollVote[]
+
+  @@index([groupId, status, closingAt])
+}
+
+model PollOption {
+  id        String   @id @default(cuid())
+  pollId    String
+  label     String
+  position  Int
+  createdAt DateTime @default(now())
+
+  poll  Poll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes PollVote[]
+
+  @@unique([pollId, position])
+  @@index([pollId])
+}
+
+model PollVote {
+  id        String   @id @default(cuid())
+  pollId    String
+  optionId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user   User       @relation("PollVotesCast", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, optionId, userId])
+  @@index([pollId, userId])
+  @@index([optionId])
 }
 
 model ForumQuestion {

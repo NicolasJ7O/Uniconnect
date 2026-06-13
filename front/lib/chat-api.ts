@@ -11,6 +11,44 @@ export interface ChatMessage {
   fileName?: string;
   fileType?: string;
   createdAt: string;
+  poll?: ChatPoll;
+}
+
+export interface ChatPollOption {
+  id: string;
+  label: string;
+  position: number;
+  votes: number;
+  voterIds: string[];
+  percentage: number;
+}
+
+export interface ChatPoll {
+  id: string;
+  messageId: string;
+  groupId: string;
+  creatorId: string;
+  question: string;
+  allowMultiple: boolean;
+  maxSelections: number;
+  closingAt?: string | null;
+  closedAt?: string | null;
+  status: 'ACTIVE' | 'CLOSED';
+  createdAt: string;
+  updatedAt: string;
+  totalVotes: number;
+  participantCount: number;
+  participantIds: string[];
+  options: ChatPollOption[];
+}
+
+export interface CreatePollPayload {
+  question?: string;
+  options: string[];
+  allowMultiple?: boolean;
+  maxSelections?: number;
+  closingAt?: string | null;
+  durationMinutes?: number | null;
 }
 
 export type Conversation = {
@@ -40,11 +78,14 @@ export const chatApi = {
     return data;
   },
 
-  sendGroupMessage: async (groupId: string, content: string, file?: any): Promise<ChatMessage> => {
+  sendGroupMessage: async (groupId: string, content: string, file?: any, poll?: CreatePollPayload): Promise<ChatMessage> => {
     const formData = new FormData();
     formData.append('content', content);
     if (file) {
       formData.append('file', file as any);
+    }
+    if (poll) {
+      formData.append('poll', JSON.stringify(poll));
     }
     const { data } = await apiClient.post(`/chat/group/${groupId}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -71,6 +112,16 @@ export const chatApi = {
 
   async getConversations(): Promise<Conversation[]> {
     const response = await apiClient.get<Conversation[]>('/chat/conversations');
+    return response.data;
+  },
+
+  voteOnPoll: async (groupId: string, pollId: string, optionIds: string[]): Promise<ChatPoll> => {
+    const response = await apiClient.post<ChatPoll>(`/chat/group/${groupId}/polls/${pollId}/votes`, { optionIds });
+    return response.data;
+  },
+
+  getPoll: async (groupId: string, pollId: string): Promise<ChatPoll> => {
+    const response = await apiClient.get<ChatPoll>(`/chat/group/${groupId}/polls/${pollId}`);
     return response.data;
   }
 };

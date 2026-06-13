@@ -115,7 +115,9 @@ async function bootstrap() {
     isDatabaseConnected = true;
     console.log('Database connection: OK');
     const { startStudySessionScheduler } = await import('./modules/study-session/study-session.scheduler.js');
+    const { startPollScheduler } = await import('./modules/chat/polls/poll.scheduler.js');
     startStudySessionScheduler();
+    startPollScheduler();
 
     httpServer.listen(port, '0.0.0.0', () => {
       console.log(`API running on http://0.0.0.0:${port}`);

@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import * as DocumentPicker from 'expo-document-picker';
 import { decorateMessage } from '@/lib/message-decorator';
+import type { ChatPoll } from '@/lib/chat-api';
 
 export default function StudyGroupChat() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -24,6 +25,15 @@ export default function StudyGroupChat() {
   const [members, setMembers] = useState<StudyGroupMember[]>([]);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
+  const [showPollComposer, setShowPollComposer] = useState(false);
+  const [pollMessage, setPollMessage] = useState('');
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptionText, setPollOptionText] = useState('');
+  const [pollOptions, setPollOptions] = useState<string[]>([]);
+  const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
+  const [pollMaxSelections, setPollMaxSelections] = useState('2');
+  const [pollDurationMinutes, setPollDurationMinutes] = useState('');
+  const [pollClosingAt, setPollClosingAt] = useState('');
   const flatListRef = useRef<FlatList>(null);
 
   const { socket } = useNotifications();
@@ -44,6 +54,19 @@ export default function StudyGroupChat() {
       setFetchingMore(false);
     }
   }, [id]);
+
+  const applyPollUpdate = useCallback((updatedPoll: ChatPoll) => {
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.poll?.id === updatedPoll.id
+          ? {
+              ...message,
+              poll: updatedPoll,
+            }
+          : message
+      )
+    );
+  }, []);
 
   const fetchGroupDetails = useCallback(async () => {
     try {
@@ -81,12 +104,23 @@ export default function StudyGroupChat() {
     };
 
     socket.on('group-message', onMessage);
+    const onPollUpdated = (poll: ChatPoll) => {
+      applyPollUpdate(poll);
+    };
+    const onPollClosed = (poll: ChatPoll) => {
+      applyPollUpdate(poll);
+    };
+
+    socket.on('poll-updated', onPollUpdated);
+    socket.on('poll-closed', onPollClosed);
 
     return () => {
       socket.emit('leave-group', id);
       socket.off('group-message', onMessage);
+      socket.off('poll-updated', onPollUpdated);
+      socket.off('poll-closed', onPollClosed);
     };
-  }, [socket, id]);
+  }, [socket, id, applyPollUpdate]);
 
   const handleSend = async () => {
     if (!inputText.trim() && !file) return;
@@ -108,6 +142,79 @@ export default function StudyGroupChat() {
       await chatApi.sendGroupMessage(id as string, inputText.trim(), fileToUpload);
       setInputText('');
       setFile(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const resetPollComposer = () => {
+    setPollMessage('');
+    setPollQuestion('');
+    setPollOptionText('');
+    setPollOptions([]);
+    setPollAllowMultiple(false);
+    setPollMaxSelections('2');
+    setPollDurationMinutes('');
+    setPollClosingAt('');
+    setShowPollComposer(false);
+  };
+
+  const addPollOption = () => {
+    const normalized = pollOptionText.trim();
+    if (!normalized) return;
+    if (pollOptions.length >= 10) return;
+    if (pollOptions.some((option) => option.toLowerCase() === normalized.toLowerCase())) return;
+    setPollOptions((prev) => [...prev, normalized]);
+    setPollOptionText('');
+  };
+
+  const removePollOption = (index: number) => {
+    setPollOptions((prev) => prev.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  const handleCreatePoll = async () => {
+    if (!pollQuestion.trim() || pollOptions.length < 2) return;
+
+    try {
+      let fileToUpload: any = null;
+      if (file) {
+        if (Platform.OS === 'web' && file.file) {
+          fileToUpload = file.file;
+        } else {
+          fileToUpload = {
+            uri: file.uri,
+            type: file.mimeType || 'application/octet-stream',
+            name: file.name || `file_${Date.now()}`
+          };
+        }
+      }
+
+      const duration = pollDurationMinutes.trim() ? Number(pollDurationMinutes) : undefined;
+      const closingAt = pollClosingAt.trim()
+        ? new Date(pollClosingAt.trim()).toISOString()
+        : undefined;
+
+      if (pollClosingAt.trim() && Number.isNaN(new Date(pollClosingAt.trim()).getTime())) {
+        throw new Error('La fecha de cierre de la encuesta no es válida');
+      }
+
+      await chatApi.sendGroupMessage(
+        id as string,
+        pollMessage.trim(),
+        fileToUpload,
+        {
+          question: pollQuestion.trim(),
+          options: pollOptions,
+          allowMultiple: pollAllowMultiple,
+          maxSelections: pollAllowMultiple ? Number(pollMaxSelections) || 2 : 1,
+          durationMinutes: Number.isFinite(duration as number) ? (duration as number) : undefined,
+          closingAt,
+        }
+      );
+
+      setInputText('');
+      setFile(null);
+      resetPollComposer();
     } catch (e) {
       console.error(e);
     }
@@ -138,6 +245,15 @@ export default function StudyGroupChat() {
     setShowMentions(false);
   };
 
+  const handleVotePoll = async (pollId: string, optionId: string) => {
+    try {
+      const updated = await chatApi.voteOnPoll(id as string, pollId, [optionId]);
+      applyPollUpdate(updated);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const renderItem = ({ item }: { item: ChatMessage }) => {
     const isMe = item.senderId === session?.user.id;
     const firstName = session?.user.name?.split(' ')[0];
@@ -148,7 +264,16 @@ export default function StudyGroupChat() {
         {!isMe && <Text style={styles.senderName}>{item.sender.name || 'Usuario'}</Text>}
         <View style={[styles.messageBubble, isMe ? styles.messageBubbleMe : styles.messageBubbleOther]}>
           {/* Here we apply the Decorator pattern dynamically */}
-          {decorateMessage(item.content, item.fileUrl, item.fileName, item.fileType, isMentioned)}
+          {decorateMessage(
+            item.content,
+            item.fileUrl,
+            item.fileName,
+            item.fileType,
+            isMentioned,
+            item.poll,
+            session?.user.id,
+            handleVotePoll
+          )}
         </View>
         <Text style={styles.timeText}>
           {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -208,9 +333,104 @@ export default function StudyGroupChat() {
         </View>
       )}
 
+      {showPollComposer && (
+        <View style={styles.pollComposer}>
+          <View style={styles.pollComposerHeader}>
+            <Text style={styles.pollComposerTitle}>Nueva encuesta</Text>
+            <Pressable onPress={resetPollComposer}>
+              <Ionicons name="close-circle" size={22} color="#ef4444" />
+            </Pressable>
+          </View>
+
+          <TextInput
+            style={styles.pollInput}
+            placeholder="Mensaje opcional"
+            value={pollMessage}
+            onChangeText={setPollMessage}
+            multiline
+          />
+          <TextInput
+            style={styles.pollInput}
+            placeholder="Pregunta de la encuesta"
+            value={pollQuestion}
+            onChangeText={setPollQuestion}
+            multiline
+          />
+
+          <View style={styles.pollOptionRowComposer}>
+            <TextInput
+              style={[styles.pollInput, styles.pollOptionDraft]}
+              placeholder="Agregar opción"
+              value={pollOptionText}
+              onChangeText={setPollOptionText}
+              onSubmitEditing={addPollOption}
+              returnKeyType="done"
+            />
+            <Pressable style={styles.pollAddBtn} onPress={addPollOption}>
+              <Ionicons name="add" size={20} color="#fff" />
+            </Pressable>
+          </View>
+
+          <View style={styles.pollChips}>
+            {pollOptions.map((option, index) => (
+              <Pressable key={`${option}-${index}`} style={styles.pollChip} onPress={() => removePollOption(index)}>
+                <Text style={styles.pollChipText}>{option}</Text>
+                <Ionicons name="close" size={14} color="#334155" />
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={styles.pollSettingsRow}>
+            <Pressable
+              style={[styles.pollToggle, pollAllowMultiple && styles.pollToggleActive]}
+              onPress={() => setPollAllowMultiple((prev) => !prev)}
+            >
+              <Text style={[styles.pollToggleText, pollAllowMultiple && styles.pollToggleTextActive]}>
+                Voto múltiple
+              </Text>
+            </Pressable>
+            <TextInput
+              style={[styles.pollInput, styles.pollInlineInput]}
+              placeholder="Máx."
+              keyboardType="number-pad"
+              value={pollMaxSelections}
+              onChangeText={setPollMaxSelections}
+            />
+          </View>
+
+          <View style={styles.pollSettingsRow}>
+            <TextInput
+              style={[styles.pollInput, styles.pollInlineInput]}
+              placeholder="Cierra en min"
+              keyboardType="number-pad"
+              value={pollDurationMinutes}
+              onChangeText={setPollDurationMinutes}
+            />
+            <TextInput
+              style={[styles.pollInput, styles.pollDateInput]}
+              placeholder="Fecha cierre ISO"
+              value={pollClosingAt}
+              onChangeText={setPollClosingAt}
+              autoCapitalize="none"
+            />
+          </View>
+
+          <Pressable
+            style={[styles.sendPollBtn, (!pollQuestion.trim() || pollOptions.length < 2) && styles.sendPollBtnDisabled]}
+            onPress={handleCreatePoll}
+            disabled={!pollQuestion.trim() || pollOptions.length < 2}
+          >
+            <Text style={styles.sendPollBtnText}>Publicar encuesta</Text>
+          </Pressable>
+        </View>
+      )}
+
       <View style={styles.inputContainer}>
         <Pressable style={styles.attachBtn} onPress={pickDocument}>
           <Ionicons name="attach" size={28} color={Colors.light.tint} />
+        </Pressable>
+        <Pressable style={styles.attachBtn} onPress={() => setShowPollComposer((prev) => !prev)}>
+          <Ionicons name="bar-chart" size={26} color={showPollComposer ? '#2563eb' : Colors.light.tint} />
         </Pressable>
         <TextInput
           style={styles.input}
@@ -246,4 +466,115 @@ const styles = StyleSheet.create({
   mentionsContainer: { maxHeight: 150, backgroundColor: '#fff', borderTopWidth: 1, borderColor: '#e5e7eb', marginHorizontal: 10, borderRadius: 8, marginBottom: 5, elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3, shadowOffset: { width: 0, height: -2 } },
   mentionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   mentionText: { fontSize: 14, color: '#374151', fontWeight: '500' },
+  pollComposer: {
+    marginHorizontal: 10,
+    marginBottom: 8,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    padding: 12,
+    gap: 10,
+  },
+  pollComposerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pollComposerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  pollInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#0f172a',
+  },
+  pollOptionRowComposer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pollOptionDraft: {
+    flex: 1,
+  },
+  pollAddBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Colors.light.tint,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pollChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  pollChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  pollChipText: {
+    color: '#1e3a8a',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  pollSettingsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  pollToggle: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingVertical: 11,
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  pollToggleActive: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#60a5fa',
+  },
+  pollToggleText: {
+    color: '#334155',
+    fontWeight: '600',
+  },
+  pollToggleTextActive: {
+    color: '#1d4ed8',
+  },
+  pollInlineInput: {
+    width: 90,
+    textAlign: 'center',
+  },
+  pollDateInput: {
+    flex: 1,
+  },
+  sendPollBtn: {
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  sendPollBtnDisabled: {
+    opacity: 0.5,
+  },
+  sendPollBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
 });

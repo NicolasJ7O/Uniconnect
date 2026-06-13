@@ -9,6 +9,8 @@ chatRouter.use(requireAuth);
 
 chatRouter.get('/group/:groupId', chatController.getGroupHistory);
 chatRouter.post('/group/:groupId', upload.single('file'), chatController.sendGroupMsg);
+chatRouter.get('/group/:groupId/polls/:pollId', chatController.getPoll);
+chatRouter.post('/group/:groupId/polls/:pollId/votes', chatController.votePoll);
 
 chatRouter.get('/conversations', chatController.getConversations);
 

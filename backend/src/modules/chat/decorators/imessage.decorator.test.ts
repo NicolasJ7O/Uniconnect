@@ -4,7 +4,8 @@ import {
   MensajeBase,
   MensajeConArchivo,
   MensajeConMencion,
-  MensajeConReaccion
+  MensajeConReaccion,
+  MensajeConEncuesta
 } from './imessage.decorator.js';
 
 test('MensajeBase Tests', async (t) => {
@@ -143,5 +144,46 @@ test('Composition and Negative Tests', async (t) => {
     
     const metadata = withMention.getMetadata();
     assert.strictEqual(metadata.file, undefined);
+  });
+
+  await t.test('Criterio 5: composed decorators render poll, attachment and mentions simultaneously', () => {
+    const timestamp = new Date();
+    const base = new MensajeBase('Organizamos la votacion @user-002', 'user-001', timestamp);
+    const withMention = new MensajeConMencion(base, ['user-002']);
+    const withFile = new MensajeConArchivo(withMention, 'https://ucaldas.edu.co/agenda.pdf', 'application/pdf', 900);
+    const withPoll = new MensajeConEncuesta(withFile, {
+      pregunta: '¿Cuál horario prefieres?',
+      opciones: ['Mañana', 'Tarde'],
+      usuariosParticipantes: ['user-001'],
+      fechaCierre: new Date(Date.now() + 60_000),
+      estado: 'activa',
+    });
+
+    withPoll.registrarVoto('user-002', 'opcion-1');
+
+    const renderOutput = withPoll.render();
+    assert.ok(renderOutput.includes('encuesta-container'));
+    assert.ok(renderOutput.includes('¿Cuál horario prefieres?'));
+    assert.ok(renderOutput.includes('agenda.pdf'));
+    assert.ok(renderOutput.includes('<span class="mention">@user-002</span>'));
+
+    const metadata = withPoll.getMetadata();
+    assert.strictEqual(metadata.encuesta.pregunta, '¿Cuál horario prefieres?');
+    assert.strictEqual(metadata.encuesta.estado, 'activa');
+    assert.strictEqual(metadata.encuesta.votosPorOpcion[0].votos, 1);
+    assert.ok(metadata.encuesta.usuariosParticipantes.includes('user-002'));
+  });
+
+  await t.test('Criterio 6: duplicate votes are rejected in single-vote polls', () => {
+    const timestamp = new Date();
+    const base = new MensajeBase('Encuesta duplicada', 'user-001', timestamp);
+    const poll = new MensajeConEncuesta(base, {
+      pregunta: '¿Qué prefieres?',
+      opciones: ['A', 'B'],
+      estado: 'activa',
+    });
+
+    poll.registrarVoto('user-002', 'opcion-1');
+    assert.throws(() => poll.registrarVoto('user-002', 'opcion-2'));
   });
 });

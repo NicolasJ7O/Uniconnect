@@ -33,6 +33,13 @@ export class ChatController {
         fileType = req.file.mimetype;
       }
 
+      const pollRaw = req.body.poll;
+      const poll = pollRaw
+        ? typeof pollRaw === 'string'
+          ? JSON.parse(pollRaw)
+          : pollRaw
+        : undefined;
+
       const message = await chatService.sendGroupMessage({
         groupId,
         senderId: userId,
@@ -40,6 +47,7 @@ export class ChatController {
         fileUrl,
         fileName,
         fileType,
+        poll,
       });
       return res.status(201).json(message);
     } catch (error) {
@@ -99,6 +107,38 @@ export class ChatController {
       
       const conversations = await chatService.getConversations(userId);
       return res.json(conversations);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getPoll(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { groupId, pollId } = req.params;
+      const userId = req.user?.sub;
+      if (!userId) return res.status(401).json({ message: 'No autenticado' });
+
+      const poll = await chatService.getPoll(groupId, pollId, userId);
+      return res.json(poll);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async votePoll(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { groupId, pollId } = req.params;
+      const userId = req.user?.sub;
+      if (!userId) return res.status(401).json({ message: 'No autenticado' });
+
+      const optionIds = Array.isArray(req.body.optionIds)
+        ? req.body.optionIds
+        : req.body.optionId
+          ? [req.body.optionId]
+          : [];
+
+      const poll = await chatService.voteOnGroupPoll(groupId, pollId, userId, optionIds);
+      return res.json(poll);
     } catch (error) {
       next(error);
     }

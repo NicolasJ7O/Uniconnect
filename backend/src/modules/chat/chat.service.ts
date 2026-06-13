@@ -1,8 +1,9 @@
 import { prisma } from '../../lib/prisma.js';
-import { getIO, emitToUser } from '../../lib/socket.js';
+import { emitToUser } from '../../lib/socket.js';
 import { AppError } from '../../errors/app-error.js';
 import { decorateMessage } from './decorators/message.decorator.js';
 import { chatSubject } from './observers/index.js';
+import { createPollForMessageInTransaction, getPollById, serializePollRecord, voteOnPoll } from './polls/poll.service.js';
 
 export class ChatService {
   async getGroupMessages(groupId: string, userId: string, page: number = 1, limit: number = 20) {
@@ -29,11 +30,32 @@ export class ChatService {
         sender: {
           select: { id: true, name: true, avatarUrl: true },
         },
+        poll: {
+          include: {
+            creator: {
+              select: { id: true, name: true, avatarUrl: true },
+            },
+            options: {
+              orderBy: { position: 'asc' },
+              include: {
+                votes: {
+                  select: {
+                    userId: true,
+                    createdAt: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
     return {
-      messages: messages.reverse(),
+      messages: messages.reverse().map((message) => ({
+        ...message,
+        poll: message.poll ? serializePollRecord(message.poll as any) : undefined,
+      })),
       total: totalCount,
       page,
       limit,
@@ -48,8 +70,16 @@ export class ChatService {
     fileUrl?: string;
     fileName?: string;
     fileType?: string;
+    poll?: {
+      question?: string;
+      options: string[];
+      allowMultiple?: boolean;
+      maxSelections?: number;
+      closingAt?: string | Date | null;
+      durationMinutes?: number | null;
+    };
   }) {
-    const { groupId, senderId, content, fileUrl, fileName, fileType } = data;
+    const { groupId, senderId, content, fileUrl, fileName, fileType, poll } = data;
 
     const group = await prisma.studyGroup.findUnique({
       where: { id: groupId },
@@ -65,27 +95,72 @@ export class ChatService {
     const memberNames = group.members.map(m => m.name || '').filter(Boolean);
     const processedContent = decorateMessage(content, { memberNames });
 
-    const message = await prisma.message.create({
-      data: {
-        content: processedContent,
-        senderId,
-        groupId,
-        isPrivate: false,
-        fileUrl,
-        fileName,
-        fileType,
-      },
-      include: {
-        sender: {
-          select: { id: true, name: true, avatarUrl: true },
+    const messageWithDecorations = await prisma.$transaction(async (tx) => {
+      const createdMessage = await tx.message.create({
+        data: {
+          content: processedContent,
+          senderId,
+          groupId,
+          isPrivate: false,
+          fileUrl,
+          fileName,
+          fileType,
         },
-      },
+      });
+
+      if (poll) {
+        await createPollForMessageInTransaction(tx, {
+          groupId,
+          messageId: createdMessage.id,
+          creatorId: senderId,
+          question: poll.question || content || 'Encuesta sin título',
+          options: poll.options,
+          allowMultiple: poll.allowMultiple,
+          maxSelections: poll.maxSelections,
+          closingAt: poll.closingAt,
+          durationMinutes: poll.durationMinutes,
+        });
+      }
+
+      return tx.message.findUnique({
+        where: { id: createdMessage.id },
+        include: {
+          sender: {
+            select: { id: true, name: true, avatarUrl: true },
+          },
+          poll: {
+            include: {
+              creator: {
+                select: { id: true, name: true, avatarUrl: true },
+              },
+              options: {
+                orderBy: { position: 'asc' },
+                include: {
+                  votes: {
+                    select: {
+                      userId: true,
+                      createdAt: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
     });
 
+    const normalizedMessage = messageWithDecorations
+      ? {
+          ...messageWithDecorations,
+          poll: messageWithDecorations.poll ? serializePollRecord(messageWithDecorations.poll as any) : undefined,
+        }
+      : null;
+
     // Notify observers (Observer Pattern)
-    chatSubject.notify('NUEVO_MENSAJE', {
+    await chatSubject.notify('NUEVO_MENSAJE', {
       isPrivate: false,
-      message
+      message: normalizedMessage
     });
 
     // Notifications logic
@@ -118,7 +193,28 @@ export class ChatService {
       }
     }
 
-    return message;
+    if (!normalizedMessage) {
+      throw new AppError(500, 'No se pudo crear el mensaje');
+    }
+
+    return normalizedMessage;
+  }
+
+  async getPoll(groupId: string, pollId: string, userId: string) {
+    const group = await prisma.studyGroup.findUnique({
+      where: { id: groupId },
+      include: { members: true },
+    });
+
+    if (!group) throw new AppError(404, 'Grupo no encontrado');
+    const isMember = group.members.some((m) => m.id === userId) || group.ownerId === userId;
+    if (!isMember) throw new AppError(403, 'No tienes acceso a esta encuesta');
+
+    return getPollById(groupId, pollId);
+  }
+
+  async voteOnGroupPoll(groupId: string, pollId: string, userId: string, optionIds: string[]) {
+    return voteOnPoll({ groupId, pollId, userId, optionIds });
   }
 
   async getPrivateMessages(userId: string, otherUserId: string, page: number = 1, limit: number = 20) {
@@ -191,7 +287,7 @@ export class ChatService {
     });
 
     // Notify observers (Observer Pattern)
-    chatSubject.notify('NUEVO_MENSAJE', {
+    await chatSubject.notify('NUEVO_MENSAJE', {
       isPrivate: true,
       message
     });

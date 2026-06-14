@@ -35,6 +35,9 @@ COPY prisma ./prisma/
 # Instalar únicamente las dependencias de producción
 RUN npm ci --omit=dev
 
+# Prisma CLI is needed at runtime to apply pending migrations before startup.
+RUN npm install -g prisma@6.19.2
+
 # Copiar cliente prisma generado, para evitar regenerar
 COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /usr/src/app/node_modules/@prisma ./node_modules/@prisma
@@ -48,5 +51,5 @@ RUN mkdir -p uploads && chown -R node:node uploads
 # Cambiar a usuario no root para mayor seguridad (buena práctica en Alpine)
 USER node
 
-# Iniciar la aplicación
-CMD ["npm", "start"]
+# Aplicar migraciones pendientes y luego iniciar la aplicación
+ENTRYPOINT ["sh", "-c", "prisma migrate deploy && exec npm start"]

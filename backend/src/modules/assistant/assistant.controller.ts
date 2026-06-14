@@ -24,7 +24,8 @@ export class AssistantController {
       const userId = req.user?.sub;
       const role = req.user?.role;
       const { sessionKey } = req.params;
-      const message = typeof req.body?.message === 'string' ? req.body.message : '';
+      const message = [req.body?.message, req.body?.content, req.body?.query]
+        .find((value): value is string => typeof value === 'string') ?? '';
 
       if (!userId) return res.status(401).json({ message: 'No autenticado' });
       if (!sessionKey) throw new AppError(400, 'La sesión del asistente es obligatoria');

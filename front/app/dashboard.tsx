@@ -7,6 +7,14 @@ import { chatApi, type Conversation } from '@/lib/chat-api';
 import { logoutWithRefreshToken } from '@/lib/auth-api';
 import { useNotifications } from '@/context/NotificationContext';
 import { Ionicons } from '@expo/vector-icons';
+import AssistantWidget from '@/components/AssistantWidget';
+
+function resolveRoleLabel(role: string) {
+  if (role === 'student') return 'Estudiante';
+  if (role === 'moderator') return 'Moderador';
+  if (role === 'admin' || role === 'super_admin') return 'Super administrador';
+  return role;
+}
 
 export default function DashboardScreen() {
   const [session, setSession] = useState<SessionData | null>(null);
@@ -92,6 +100,8 @@ export default function DashboardScreen() {
         </View>
       </View>
 
+      <AssistantWidget session={session} roleLabel={resolveRoleLabel(session.user.role)} />
+
 
 
       <View style={styles.card}>
@@ -104,7 +114,7 @@ export default function DashboardScreen() {
 
         <Text style={styles.cardText}>Correo: {profile?.email || session.user.email}</Text>
         <Text style={styles.cardText}>Nombre: {profile?.name || session.user.name || 'Sin nombre'}</Text>
-        <Text style={styles.cardText}>Rol: {session.user.role === 'student' ? 'Estudiante' : session.user.role === 'admin' ? 'Administrador' : session.user.role}</Text>
+        <Text style={styles.cardText}>Rol: {resolveRoleLabel(session.user.role)}</Text>
 
         {profile && (
           <View style={styles.extraProfileInfo}>

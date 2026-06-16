@@ -134,6 +134,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 showToast(data.message, 'error');
             });
 
+            // Super-admin moderation escalation alert
+            newSocket.on('super-admin-alert', (data) => {
+                refreshUnreadCount();
+                showToast(
+                    `⚠️ Alerta de moderación: "${data.userName}" tiene ${data.blockCount} bloqueos por spam`,
+                    'error'
+                );
+            });
+
             newSocket.on('new-notification', (data) => {
                 console.log('Got new-notification event in context:', data);
                 refreshUnreadCount();

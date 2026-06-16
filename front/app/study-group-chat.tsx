@@ -10,6 +10,8 @@ import { Colors } from '@/constants/Colors';
 import * as DocumentPicker from 'expo-document-picker';
 import { decorateMessage } from '@/lib/message-decorator';
 import type { ChatPoll } from '@/lib/chat-api';
+import ModerationBanner, { type ModerationRejectedPayload } from '@/components/ModerationBanner';
+import ModerationWhyModal from '@/components/ModerationWhyModal';
 
 export default function StudyGroupChat() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -35,6 +37,9 @@ export default function StudyGroupChat() {
   const [pollDurationMinutes, setPollDurationMinutes] = useState('');
   const [pollClosingAt, setPollClosingAt] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [moderationError, setModerationError] = useState<ModerationRejectedPayload | null>(null);
+  const [showWhyModal, setShowWhyModal] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   const { socket } = useNotifications();
@@ -112,14 +117,25 @@ export default function StudyGroupChat() {
       applyPollUpdate(poll);
     };
 
+    const onModerationRejected = (payload: ModerationRejectedPayload) => {
+      setIsSending(false);
+      setModerationError(payload);
+      if (payload.blockedUntil) {
+        setIsBlocked(true);
+      }
+      // inputText is intentionally NOT cleared so the user can edit and retry
+    };
+
     socket.on('poll-updated', onPollUpdated);
     socket.on('poll-closed', onPollClosed);
+    socket.on('moderation-rejected', onModerationRejected);
 
     return () => {
       socket.emit('leave-group', id);
       socket.off('group-message', onMessage);
       socket.off('poll-updated', onPollUpdated);
       socket.off('poll-closed', onPollClosed);
+      socket.off('moderation-rejected', onModerationRejected);
     };
   }, [socket, id, applyPollUpdate]);
 
@@ -145,10 +161,14 @@ export default function StudyGroupChat() {
       await chatApi.sendGroupMessage(id as string, inputText.trim(), fileToUpload);
       setInputText('');
       setFile(null);
+      setModerationError(null); // Clear any previous moderation error on success
     } catch (e: any) {
       console.error(e);
-      const errorMsg = e?.response?.data?.message || 'Error al enviar el mensaje por moderación';
-      alert(errorMsg);
+      // moderation-rejected is handled via WebSocket; only show generic errors here
+      if (!e?.response?.data?.moderationCode) {
+        const errorMsg = e?.response?.data?.message || 'Error al enviar el mensaje';
+        console.warn(errorMsg);
+      }
     } finally {
       setIsSending(false);
     }
@@ -224,10 +244,13 @@ export default function StudyGroupChat() {
       setInputText('');
       setFile(null);
       resetPollComposer();
+      setModerationError(null);
     } catch (e: any) {
       console.error(e);
-      const errorMsg = e?.response?.data?.message || 'Error al crear la encuesta por moderación';
-      alert(errorMsg);
+      if (!e?.response?.data?.moderationCode) {
+        const errorMsg = e?.response?.data?.message || 'Error al crear la encuesta';
+        console.warn(errorMsg);
+      }
     } finally {
       setIsSending(false);
     }
@@ -449,25 +472,40 @@ export default function StudyGroupChat() {
         </View>
       )}
 
+      {/* Moderation banner – shown below the chat, above the input */}
+      {moderationError && (
+        <ModerationBanner
+          payload={moderationError}
+          onDismiss={() => {
+            setModerationError(null);
+            if (!moderationError.blockedUntil || new Date(moderationError.blockedUntil) <= new Date()) {
+              setIsBlocked(false);
+            }
+          }}
+          onWhyPress={() => setShowWhyModal(true)}
+          onBlockExpired={() => setIsBlocked(false)}
+        />
+      )}
+
       <View style={styles.inputContainer}>
-        <Pressable style={styles.attachBtn} onPress={pickDocument} disabled={isSending}>
-          <Ionicons name="attach" size={28} color={isSending ? '#9ca3af' : Colors.light.tint} />
+        <Pressable style={styles.attachBtn} onPress={pickDocument} disabled={isSending || isBlocked}>
+          <Ionicons name="attach" size={28} color={(isSending || isBlocked) ? '#9ca3af' : Colors.light.tint} />
         </Pressable>
-        <Pressable style={styles.attachBtn} onPress={() => setShowPollComposer((prev) => !prev)} disabled={isSending}>
-          <Ionicons name="bar-chart" size={26} color={showPollComposer ? '#2563eb' : (isSending ? '#9ca3af' : Colors.light.tint)} />
+        <Pressable style={styles.attachBtn} onPress={() => setShowPollComposer((prev) => !prev)} disabled={isSending || isBlocked}>
+          <Ionicons name="bar-chart" size={26} color={showPollComposer ? '#2563eb' : ((isSending || isBlocked) ? '#9ca3af' : Colors.light.tint)} />
         </Pressable>
         <TextInput
           style={styles.input}
-          placeholder={isSending ? "Enviando..." : "Escribe un mensaje..."}
+          placeholder={isBlocked ? '⏳ Bloqueado temporalmente...' : (isSending ? 'Enviando...' : 'Escribe un mensaje...')}
           value={inputText}
           onChangeText={handleTextChange}
           multiline
-          editable={!isSending}
+          editable={!isSending && !isBlocked}
         />
         <Pressable 
-          style={[styles.sendBtn, (!inputText.trim() && !file || isSending) && styles.sendBtnDisabled]} 
+          style={[styles.sendBtn, (!inputText.trim() && !file || isSending || isBlocked) && styles.sendBtnDisabled]} 
           onPress={handleSend}
-          disabled={!inputText.trim() && !file || isSending}
+          disabled={!inputText.trim() && !file || isSending || isBlocked}
         >
           {isSending ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -476,6 +514,13 @@ export default function StudyGroupChat() {
           )}
         </Pressable>
       </View>
+
+      {/* Modal ¿Por qué? */}
+      <ModerationWhyModal
+        visible={showWhyModal}
+        moderationCode={moderationError?.moderationCode}
+        onClose={() => setShowWhyModal(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

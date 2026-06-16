@@ -291,6 +291,16 @@ export default function DashboardScreen() {
       </View>
 
       <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Buscar Estudiantes</Text>
+        </View>
+        <Text style={styles.cardText}>Encuentra estudiantes por nombre o correo y visualiza su perfil completo.</Text>
+        <Pressable style={[styles.actionButton, { backgroundColor: '#6b21a8', borderColor: '#e9d5ff' }]} onPress={() => router.push('/student-search')}>
+          <Text style={styles.actionButtonLabel}>Buscar Estudiantes</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.cardTitle}>Mensajes Privados</Text>
         {conversations.length > 0 ? (
           conversations.map((conv) => (

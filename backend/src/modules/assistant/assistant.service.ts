@@ -23,7 +23,7 @@ type AssistantMessageRecord = Prisma.AssistantMessageGetPayload<{}>;
 
 const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5-coder:3b';
-const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 12000);
+const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 40000);
 const MAX_CONTEXT_MESSAGES = 8;
 const promptStrategyContext = new PromptStrategyContext();
 const logger = Logger.getInstance();

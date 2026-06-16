@@ -50,9 +50,11 @@ export const assistantApi = {
   },
 
   async sendMessage(sessionKey: string, message: string): Promise<AssistantSendResponse> {
-    const response = await apiClient.post<AssistantSendResponse>(`/assistant/session/${sessionKey}/messages`, {
-      message,
-    });
+    const response = await apiClient.post<AssistantSendResponse>(
+      `/assistant/session/${sessionKey}/messages`, 
+      { message },
+      { timeout: 45000 } // Overrides default 10s timeout to allow LLM generation
+    );
     return response.data;
   },
 };

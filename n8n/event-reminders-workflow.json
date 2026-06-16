@@ -1,0 +1,310 @@
+{
+  "name": "Recordatorios Automáticos de Eventos (HU-N8N01)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "e81db6eb-1b3a-4ea5-80df-cd6543b35048",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT e.id as \"eventoId\", e.title as \"eventName\", e.\"eventDate\", e.location, u.id as \"userId\", u.name as \"userName\", u.email FROM \"Event\" e JOIN \"EventAttendance\" a ON e.id = a.\"eventId\" JOIN \"User\" u ON a.\"userId\" = u.id WHERE e.\"eventDate\" >= NOW() + INTERVAL '23 hours' AND e.\"eventDate\" <= NOW() + INTERVAL '25 hours' AND a.status = 'ACTIVE' AND u.\"isActive\" = true;",
+        "options": {}
+      },
+      "id": "7dc1a9e8-460f-4886-ac4c-22baaa472d8a",
+      "name": "Postgres: Consultar Eventos 24h",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        280
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "b0a202ea-d439-44de-9d10-dfbc5392d770",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        660,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=Recordatorio: {{ $json.eventName }} está por comenzar",
+        "emailType": "html",
+        "message": "=<!DOCTYPE html>\n<html>\n<head>\n<style>\n  body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }\n  .container { background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }\n  h1 { color: #333333; }\n  p { color: #666666; }\n  .button { display: inline-block; padding: 10px 20px; background-color: #007bff; color: #ffffff; text-decoration: none; border-radius: 5px; font-weight: bold; }\n</style>\n</head>\n<body>\n  <div class=\"container\">\n    <h1>¡Hola {{ $json.userName }}!</h1>\n    <p>Te recordamos que tu evento <strong>{{ $json.eventName }}</strong> está a menos de 24 horas de comenzar.</p>\n    <p><strong>Fecha y Hora:</strong> {{ $json.eventDate }}</p>\n    <p><strong>Ubicación:</strong> {{ $json.location }}</p>\n    <p>Para ingresar, ten a mano tu pase QR. Puedes acceder a él mediante el siguiente enlace:</p>\n    <a href=\"https://uniconnect.com/eventos/{{ $json.eventoId }}/qr?userId={{ $json.userId }}\" class=\"button\">Ver mi Pase QR</a>\n    <p>¡Te esperamos!</p>\n  </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "834c0e35-6d75-4d7d-bbf1-840a463a5df5",
+      "name": "Gmail: Enviar Recordatorio",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        280
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-cred-id",
+          "name": "Gmail Account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.messageId }}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "id": "18f99e3a-c567-4e65-ba4c-a1118dc8e1fb",
+      "name": "Error en Envío?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO event_reminder_logs (id, \"eventoId\", \"userId\", email, status, \"errorMessage\", \"sentAt\") VALUES (gen_random_uuid(), '{{ $node[\"Split In Batches\"].json[\"eventoId\"] }}', '{{ $node[\"Split In Batches\"].json[\"userId\"] }}', '{{ $node[\"Split In Batches\"].json[\"email\"] }}', 'failed', '{{ $json.error.message || \"Error de envío por Gmail\" }}', NOW());",
+        "options": {}
+      },
+      "id": "f516a22b-28f0-459f-abef-7b6c891f7a08",
+      "name": "Postgres: Log Fallido",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [
+        1320,
+        180
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO event_reminder_logs (id, \"eventoId\", \"userId\", email, status, \"errorMessage\", \"sentAt\") VALUES (gen_random_uuid(), '{{ $node[\"Split In Batches\"].json[\"eventoId\"] }}', '{{ $node[\"Split In Batches\"].json[\"userId\"] }}', '{{ $node[\"Split In Batches\"].json[\"email\"] }}', 'success', NULL, NOW());",
+        "options": {}
+      },
+      "id": "c71d6f1a-b684-469b-8f3a-c85244519965",
+      "name": "Postgres: Log Exitoso",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [
+        1320,
+        380
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "b18b449b-7db2-48ec-9ff6-3e4210d322b6",
+      "name": "Loop End (Failed)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        180
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "4b68e982-fcf8-4ab7-a419-f9c3ff72a5b2",
+      "name": "Loop End (Success)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO n8n_executions (id, \"workflowName\", \"startedAt\", \"finishedAt\", \"totalSent\", \"totalFailed\", \"durationMs\", status, \"createdAt\") VALUES (gen_random_uuid(), 'HU-N8N01: Recordatorios de Eventos', NOW(), NOW(), (SELECT COUNT(*) FROM event_reminder_logs WHERE status = 'success' AND \"sentAt\" >= NOW() - INTERVAL '1 hour'), (SELECT COUNT(*) FROM event_reminder_logs WHERE status = 'failed' AND \"sentAt\" >= NOW() - INTERVAL '1 hour'), 0, 'success', NOW());",
+        "options": {}
+      },
+      "id": "7809787e-e5d3-45ab-8c9e-52b3149a62f4",
+      "name": "Postgres: Log Ejecución",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [
+        660,
+        80
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Consultar Eventos 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Consultar Eventos 24h": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Enviar Recordatorio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Postgres: Log Ejecución",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Enviar Recordatorio": {
+      "main": [
+        [
+          {
+            "node": "Error en Envío?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error en Envío?": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Log Fallido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Postgres: Log Exitoso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Log Fallido": {
+      "main": [
+        [
+          {
+            "node": "Loop End (Failed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Log Exitoso": {
+      "main": [
+        [
+          {
+            "node": "Loop End (Success)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop End (Failed)": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop End (Success)": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "timezone": "America/Bogota"
+  }
+}

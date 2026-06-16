@@ -1,9 +1,10 @@
 import { prisma } from '../../lib/prisma.js';
 import { emitToUser } from '../../lib/socket.js';
-import { AppError } from '../../errors/app-error.js';
+import { AppError, ModerationError } from '../../errors/app-error.js';
 import { decorateMessage } from './decorators/message.decorator.js';
 import { chatSubject } from './observers/index.js';
 import { createPollForMessageInTransaction, getPollById, serializePollRecord, voteOnPoll } from './polls/poll.service.js';
+import { runModerationPipeline } from './handlers/moderation-pipeline.js';
 
 export class ChatService {
   async getGroupMessages(groupId: string, userId: string, page: number = 1, limit: number = 20) {
@@ -78,126 +79,29 @@ export class ChatService {
       closingAt?: string | Date | null;
       durationMinutes?: number | null;
     };
+    ip?: string;
+    metadata?: any;
   }) {
-    const { groupId, senderId, content, fileUrl, fileName, fileType, poll } = data;
+    const { groupId, senderId, content, fileUrl, fileName, fileType, poll, ip, metadata } = data;
 
-    const group = await prisma.studyGroup.findUnique({
-      where: { id: groupId },
-      include: { members: true },
-    });
-
-    if (!group) throw new AppError(404, 'Grupo no encontrado');
-
-    const isMember = group.members.some((m) => m.id === senderId) || group.ownerId === senderId;
-    if (!isMember) throw new AppError(403, 'No perteneces a este grupo');
-
-    // Apply decorators to the content using the helper
-    const memberNames = group.members.map(m => m.name || '').filter(Boolean);
-    const processedContent = decorateMessage(content, { memberNames });
-
-    const messageWithDecorations = await prisma.$transaction(async (tx) => {
-      const createdMessage = await tx.message.create({
-        data: {
-          content: processedContent,
-          senderId,
-          groupId,
-          isPrivate: false,
-          fileUrl,
-          fileName,
-          fileType,
-        },
-      });
-
-      if (poll) {
-        await createPollForMessageInTransaction(tx, {
-          groupId,
-          messageId: createdMessage.id,
-          creatorId: senderId,
-          question: poll.question || content || 'Encuesta sin título',
-          options: poll.options,
-          allowMultiple: poll.allowMultiple,
-          maxSelections: poll.maxSelections,
-          closingAt: poll.closingAt,
-          durationMinutes: poll.durationMinutes,
-        });
-      }
-
-      return tx.message.findUnique({
-        where: { id: createdMessage.id },
-        include: {
-          sender: {
-            select: { id: true, name: true, avatarUrl: true },
-          },
-          poll: {
-            include: {
-              creator: {
-                select: { id: true, name: true, avatarUrl: true },
-              },
-              options: {
-                orderBy: { position: 'asc' },
-                include: {
-                  votes: {
-                    select: {
-                      userId: true,
-                      createdAt: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      });
-    });
-
-    const normalizedMessage = messageWithDecorations
-      ? {
-          ...messageWithDecorations,
-          poll: messageWithDecorations.poll ? serializePollRecord(messageWithDecorations.poll as any) : undefined,
-        }
-      : null;
-
-    // Notify observers (Observer Pattern)
-    await chatSubject.notify('NUEVO_MENSAJE', {
+    const result = await runModerationPipeline({
+      userId: senderId,
+      content,
+      chatId: groupId,
       isPrivate: false,
-      message: normalizedMessage
+      fileUrl,
+      fileName,
+      fileType,
+      poll,
+      ip,
+      metadata,
     });
 
-    // Notifications logic
-    for (const member of group.members) {
-      if (String(member.id) !== String(senderId)) {
-        const memberFirstName = member.name?.split(' ')[0];
-        const isMentioned = !!memberFirstName && content.includes(`@${memberFirstName}`);
-
-        let notificationType = 'GROUP_MESSAGE';
-        let notificationMsg = `Nuevo mensaje en el grupo ${group.name}`;
-
-        if (isMentioned) {
-          notificationType = 'MENTION';
-          notificationMsg = `Te han mencionado en el grupo ${group.name}`;
-        }
-
-        const notif = await prisma.notification.create({
-          data: {
-            userId: member.id,
-            type: notificationType,
-            message: notificationMsg,
-          }
-        });
-
-        emitToUser(member.id, 'new-notification', {
-          ...notif,
-          groupId: group.id,
-          groupName: group.name
-        });
-      }
+    if (!result.approved) {
+      throw new ModerationError(result.moderationCode || 'MO_REJECTED', result.message || 'Mensaje rechazado');
     }
 
-    if (!normalizedMessage) {
-      throw new AppError(500, 'No se pudo crear el mensaje');
-    }
-
-    return normalizedMessage;
+    return result.savedMessage;
   }
 
   async getPoll(groupId: string, pollId: string, userId: string) {
@@ -260,55 +164,28 @@ export class ChatService {
     fileUrl?: string;
     fileName?: string;
     fileType?: string;
+    ip?: string;
+    metadata?: any;
   }) {
-    const { senderId, receiverId, content, fileUrl, fileName, fileType } = data;
-    
-    // Recupera la otra persona para poder decorarle la mención si existe
-    const receiver = await prisma.user.findUnique({
-      where: { id: receiverId }
-    });
+    const { senderId, receiverId, content, fileUrl, fileName, fileType, ip, metadata } = data;
 
-    const memberNames = receiver && receiver.name ? [receiver.name] : [];
-    const processedContent = decorateMessage(content, { memberNames });
-
-    const message = await prisma.message.create({
-      data: {
-        content: processedContent,
-        senderId,
-        receiverId,
-        isPrivate: true,
-        fileUrl,
-        fileName,
-        fileType,
-      },
-      include: {
-        sender: { select: { id: true, name: true, avatarUrl: true } },
-      },
-    });
-
-    // Notify observers (Observer Pattern)
-    await chatSubject.notify('NUEVO_MENSAJE', {
+    const result = await runModerationPipeline({
+      userId: senderId,
+      content,
+      chatId: receiverId,
       isPrivate: true,
-      message
+      fileUrl,
+      fileName,
+      fileType,
+      ip,
+      metadata,
     });
 
-    // Notification logic
-    if (String(receiverId) !== String(senderId)) {
-      const notif = await prisma.notification.create({
-        data: {
-          userId: receiverId,
-          type: 'PRIVATE_MESSAGE',
-          message: `Nuevo mensaje privado de ${message.sender.name}`,
-        }
-      });
-      emitToUser(receiverId, 'new-notification', {
-        ...notif,
-        senderId: senderId,
-        senderName: message.sender.name || 'Usuario'
-      });
+    if (!result.approved) {
+      throw new ModerationError(result.moderationCode || 'MO_REJECTED', result.message || 'Mensaje rechazado');
     }
 
-    return message;
+    return result.savedMessage;
   }
 
   async getConversations(userId: string) {

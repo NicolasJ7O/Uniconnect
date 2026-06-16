@@ -20,37 +20,44 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  identities     AuthIdentity[]
-  sessions       Session[]
-  subjects       Subject[]            @relation("StudentSubjects")
-  ownedGroups    StudyGroup[]         @relation("GroupOwner")
-  memberOfGroups StudyGroup[]         @relation("GroupMembers")
-  uploadedResources StudyGroupResource[]
-  eventSubscriptions EventSubscription[] @relation("EventSubscriptions")
-  posts           Post[]              @relation("UserPosts")
-  comments        Comment[]           @relation("UserComments")
-  organizedEvents Event[]             @relation("OrganizedEvents")
-  groupRequests   StudyGroupRequest[] @relation("UserGroupRequests")
-  notifications   Notification[]      @relation("UserNotifications")
-  transfersSent   OwnershipTransferRequest[] @relation("TransfersSent")
-  transfersReceived OwnershipTransferRequest[] @relation("TransfersReceived")
-  sentMessages      Message[] @relation("SentMessages")
-  receivedMessages  Message[] @relation("ReceivedMessages")
-  pollsCreated      Poll[] @relation("PollsCreated")
-  pollVotesCast     PollVote[] @relation("PollVotesCast")
-  assistantSessions AssistantSession[] @relation("UserAssistantSessions")
+  identities         AuthIdentity[]
+  sessions           Session[]
+  subjects           Subject[]                  @relation("StudentSubjects")
+  ownedGroups        StudyGroup[]               @relation("GroupOwner")
+  memberOfGroups     StudyGroup[]               @relation("GroupMembers")
+  uploadedResources  StudyGroupResource[]
+  eventSubscriptions EventSubscription[]        @relation("EventSubscriptions")
+  posts              Post[]                     @relation("UserPosts")
+  comments           Comment[]                  @relation("UserComments")
+  organizedEvents    Event[]                    @relation("OrganizedEvents")
+  groupRequests      StudyGroupRequest[]        @relation("UserGroupRequests")
+  notifications      Notification[]             @relation("UserNotifications")
+  transfersSent      OwnershipTransferRequest[] @relation("TransfersSent")
+  transfersReceived  OwnershipTransferRequest[] @relation("TransfersReceived")
+  sentMessages       Message[]                  @relation("SentMessages")
+  receivedMessages   Message[]                  @relation("ReceivedMessages")
+  pollsCreated       Poll[]                     @relation("PollsCreated")
+  pollVotesCast      PollVote[]                 @relation("PollVotesCast")
+  assistantSessions  AssistantSession[]         @relation("UserAssistantSessions")
+  assistantFeedback  AssistantFeedback[]        @relation("UserAssistantFeedback")
+  eventAttendances   EventAttendance[]          @relation("UserEventAttendances")
+  eventReminderLogs  EventReminderLog[]         @relation("UserEventReminderLogs")
+  welcomeEmailLogs   WelcomeEmailLog[]          @relation("UserWelcomeEmailLogs")
 
-  forumQuestions  ForumQuestion[]     @relation("UserForumQuestions")
-  forumAnswers    ForumAnswer[]       @relation("UserForumAnswers")
-  questionVotes   ForumQuestionVote[] @relation("UserQuestionVotes")
-  answerVotes     ForumAnswerVote[]   @relation("UserAnswerVotes")
-  forumLogs       ForumAuditLog[]     @relation("UserForumLogs")
+  forumQuestions ForumQuestion[]     @relation("UserForumQuestions")
+  forumAnswers   ForumAnswer[]       @relation("UserForumAnswers")
+  questionVotes  ForumQuestionVote[] @relation("UserQuestionVotes")
+  answerVotes    ForumAnswerVote[]   @relation("UserAnswerVotes")
+  forumLogs      ForumAuditLog[]     @relation("UserForumLogs")
 
-  academicResources AcademicResource[] @relation("UserAcademicResources")
-  resourceAuditLogs ResourceAuditLog[] @relation("UserResourceLogs")
-  studySessionsCreated SesionEstudioBase[] @relation("StudySessionCreator")
-  studySessionSeriesCreated SesionEstudioSerie[] @relation("StudySessionSeriesCreator")
-  studySessionParticipants SesionEstudioParticipante[]
+  academicResources         AcademicResource[]          @relation("UserAcademicResources")
+  resourceAuditLogs         ResourceAuditLog[]          @relation("UserResourceLogs")
+  studySessionsCreated      SesionEstudioBase[]         @relation("StudySessionCreator")
+  studySessionSeriesCreated SesionEstudioSerie[]        @relation("StudySessionSeriesCreator")
+  studySessionParticipants  SesionEstudioParticipante[]
+
+  moderationLogs            ModerationAuditLog[]        @relation("UserModerationLogs")
+  blocks                    UserBlock[]                 @relation("UserBlocks")
 }
 
 model Subject {
@@ -61,15 +68,15 @@ model Subject {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  students User[] @relation("StudentSubjects")
+  students    User[]       @relation("StudentSubjects")
   studyGroups StudyGroup[] @relation("SubjectGroups")
 
-  forumQuestions    ForumQuestion[]
-  forumLogs         ForumAuditLog[]      @relation("SubjectForumLogs")
+  forumQuestions ForumQuestion[]
+  forumLogs      ForumAuditLog[] @relation("SubjectForumLogs")
 
-  academicResources AcademicResource[]   @relation("SubjectAcademicResources")
-  resourceAuditLogs ResourceAuditLog[]   @relation("SubjectResourceLogs")
-  studySessions SesionEstudioBase[]      @relation("StudySessionSubject")
+  academicResources  AcademicResource[]   @relation("SubjectAcademicResources")
+  resourceAuditLogs  ResourceAuditLog[]   @relation("SubjectResourceLogs")
+  studySessions      SesionEstudioBase[]  @relation("StudySessionSubject")
   studySessionSeries SesionEstudioSerie[] @relation("StudySessionSeriesSubject")
 }
 
@@ -112,15 +119,15 @@ model StudyGroup {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  owner     User                 @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  subject   Subject?             @relation("SubjectGroups", fields: [subjectId], references: [id], onDelete: Cascade)
-  members   User[]               @relation("GroupMembers")
-  resources StudyGroupResource[]
-  requests StudyGroupRequest[] @relation("GroupRequests")
-  posts    Post[]              @relation("GroupPosts")
+  owner              User                       @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  subject            Subject?                   @relation("SubjectGroups", fields: [subjectId], references: [id], onDelete: Cascade)
+  members            User[]                     @relation("GroupMembers")
+  resources          StudyGroupResource[]
+  requests           StudyGroupRequest[]        @relation("GroupRequests")
+  posts              Post[]                     @relation("GroupPosts")
   ownershipTransfers OwnershipTransferRequest[]
-  messages Message[]           @relation("GroupMessages")
-  polls    Poll[]
+  messages           Message[]                  @relation("GroupMessages")
+  polls              Poll[]
 }
 
 model StudyGroupResource {
@@ -128,7 +135,7 @@ model StudyGroupResource {
   groupId    String
   uploaderId String?
   title      String
-  type       String   // "PDF" or "LINK"
+  type       String // "PDF" or "LINK"
   url        String
   createdAt  DateTime @default(now())
 
@@ -181,12 +188,67 @@ model Event {
   description String
   eventDate   DateTime
   location    String?
+  isPrivate   Boolean  @default(false)
+  capacity    Int      @default(0)
   category    String   @default("OTRO") // ACADEMICO, CULTURAL, DEPORTIVO, TECNOLOGIA, OTRO
   organizerId String
+  categoryId  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  organizer User @relation("OrganizedEvents", fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer         User               @relation("OrganizedEvents", fields: [organizerId], references: [id], onDelete: Cascade)
+  eventCategory     EventCategory?     @relation("EventCategoryEvents", fields: [categoryId], references: [id], onDelete: SetNull)
+  attendances       EventAttendance[]  @relation("EventAttendances")
+  invitations       EventInvitation[]  @relation("EventInvitations")
+  eventReminderLogs EventReminderLog[] @relation("EventReminderLogs")
+}
+
+model EventInvitation {
+  id         String    @id @default(cuid())
+  eventId    String
+  email      String
+  token      String    @unique
+  status     String    @default("pending")
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  consumedAt DateTime?
+  lastError  String?
+
+  event Event @relation("EventInvitations", fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, email])
+  @@index([status, expiresAt])
+}
+
+model EventAttendance {
+  id                String    @id @default(cuid())
+  eventId           String
+  userId            String
+  status            String    @default("ACTIVE")
+  checkedInAt       DateTime?
+  lastVerifiedAt    DateTime?
+  verificationCount Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  event Event @relation("EventAttendances", fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation("UserEventAttendances", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+}
+
+model EventCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  events Event[] @relation("EventCategoryEvents")
 }
 
 model EventSubscription {
@@ -201,13 +263,13 @@ model EventSubscription {
 }
 
 model AssistantSession {
-  id          String   @id @default(cuid())
-  userId      String
-  sessionKey  String
-  role        String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  lastSeenAt  DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  sessionKey String
+  role       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  lastSeenAt DateTime @default(now())
 
   user     User               @relation("UserAssistantSessions", fields: [userId], references: [id], onDelete: Cascade)
   messages AssistantMessage[]
@@ -227,6 +289,27 @@ model AssistantMessage {
   session AssistantSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, createdAt])
+}
+
+model AssistantFeedback {
+  id                 String   @id @default(cuid())
+  userId             String
+  assistantMessageId String?
+  sessionId          String?
+  question           String
+  answer             String
+  rating             String   @default("NOT_USEFUL")
+  comment            String?
+  chunks             Json?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation("UserAssistantFeedback", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assistantMessageId])
+  @@index([rating, createdAt])
+  @@index([question])
 }
 
 model StudyGroupRequest {
@@ -283,10 +366,10 @@ model Message {
   fileType   String?
   createdAt  DateTime @default(now())
 
-  sender    User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver  User?       @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
-  group     StudyGroup? @relation("GroupMessages", fields: [groupId], references: [id], onDelete: Cascade)
-  poll      Poll?
+  sender   User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User?       @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  group    StudyGroup? @relation("GroupMessages", fields: [groupId], references: [id], onDelete: Cascade)
+  poll     Poll?
 }
 
 enum PollStatus {
@@ -295,22 +378,22 @@ enum PollStatus {
 }
 
 model Poll {
-  id              String     @id @default(cuid())
-  messageId       String     @unique
-  groupId         String
-  creatorId       String
-  question        String
-  allowMultiple   Boolean    @default(false)
-  maxSelections   Int        @default(1)
-  closingAt       DateTime?
-  closedAt        DateTime?
-  status          PollStatus @default(ACTIVE)
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  id            String     @id @default(cuid())
+  messageId     String     @unique
+  groupId       String
+  creatorId     String
+  question      String
+  allowMultiple Boolean    @default(false)
+  maxSelections Int        @default(1)
+  closingAt     DateTime?
+  closedAt      DateTime?
+  status        PollStatus @default(ACTIVE)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
-  message Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  group   StudyGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  creator User        @relation("PollsCreated", fields: [creatorId], references: [id], onDelete: Cascade)
+  message Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  group   StudyGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  creator User         @relation("PollsCreated", fields: [creatorId], references: [id], onDelete: Cascade)
   options PollOption[]
   votes   PollVote[]
 
@@ -324,7 +407,7 @@ model PollOption {
   position  Int
   createdAt DateTime @default(now())
 
-  poll  Poll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  poll  Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
   votes PollVote[]
 
   @@unique([pollId, position])
@@ -357,10 +440,10 @@ model ForumQuestion {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  subject   Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  author    User                @relation("UserForumQuestions", fields: [authorId], references: [id], onDelete: Cascade)
-  answers   ForumAnswer[]
-  votes     ForumQuestionVote[]
+  subject Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  author  User                @relation("UserForumQuestions", fields: [authorId], references: [id], onDelete: Cascade)
+  answers ForumAnswer[]
+  votes   ForumQuestionVote[]
 }
 
 model ForumAnswer {
@@ -382,7 +465,7 @@ model ForumQuestionVote {
   id         String   @id @default(cuid())
   userId     String
   questionId String
-  value      Int      // 1 or -1
+  value      Int // 1 or -1
   createdAt  DateTime @default(now())
 
   user     User          @relation("UserQuestionVotes", fields: [userId], references: [id], onDelete: Cascade)
@@ -395,7 +478,7 @@ model ForumAnswerVote {
   id        String   @id @default(cuid())
   userId    String
   answerId  String
-  value     Int      // 1 or -1
+  value     Int // 1 or -1
   createdAt DateTime @default(now())
 
   user   User        @relation("UserAnswerVotes", fields: [userId], references: [id], onDelete: Cascade)
@@ -405,16 +488,16 @@ model ForumAnswerVote {
 }
 
 model ForumAuditLog {
-  id         String   @id @default(cuid())
-  userId     String
-  action     String   // CREATE_QUESTION, UPDATE_QUESTION, CREATE_ANSWER, VOTE_QUESTION, VOTE_ANSWER, ACCEPT_ANSWER
-  subjectId  String
-  targetId   String   // ID of question or answer
-  metadata   Json?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  action    String // CREATE_QUESTION, UPDATE_QUESTION, CREATE_ANSWER, VOTE_QUESTION, VOTE_ANSWER, ACCEPT_ANSWER
+  subjectId String
+  targetId  String // ID of question or answer
+  metadata  Json?
+  createdAt DateTime @default(now())
 
-  user       User          @relation("UserForumLogs", fields: [userId], references: [id], onDelete: Cascade)
-  subject    Subject       @relation("SubjectForumLogs", fields: [subjectId], references: [id], onDelete: Cascade)
+  user    User    @relation("UserForumLogs", fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation("SubjectForumLogs", fields: [subjectId], references: [id], onDelete: Cascade)
 }
 
 // ============================================================
@@ -434,8 +517,8 @@ model AcademicResource {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  author    User              @relation("UserAcademicResources", fields: [authorId], references: [id], onDelete: Cascade)
-  subject   Subject           @relation("SubjectAcademicResources", fields: [subjectId], references: [id], onDelete: Cascade)
+  author    User               @relation("UserAcademicResources", fields: [authorId], references: [id], onDelete: Cascade)
+  subject   Subject            @relation("SubjectAcademicResources", fields: [subjectId], references: [id], onDelete: Cascade)
   openGraph ResourceOpenGraph?
   tags      ResourceTagMap[]
   stats     ResourceStats?
@@ -443,21 +526,21 @@ model AcademicResource {
 }
 
 model ResourceOpenGraph {
-  id          String   @id @default(cuid())
-  resourceId  String   @unique
-  ogTitle     String?
+  id            String   @id @default(cuid())
+  resourceId    String   @unique
+  ogTitle       String?
   ogDescription String?
-  ogImage     String?
-  ogSiteName  String?
-  fetchedAt   DateTime @default(now())
+  ogImage       String?
+  ogSiteName    String?
+  fetchedAt     DateTime @default(now())
 
   resource AcademicResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 }
 
 model ResourceTag {
-  id    String           @id @default(cuid())
-  name  String           @unique
-  maps  ResourceTagMap[]
+  id   String           @id @default(cuid())
+  name String           @unique
+  maps ResourceTagMap[]
 }
 
 model ResourceTagMap {
@@ -471,12 +554,12 @@ model ResourceTagMap {
 }
 
 model ResourceStats {
-  id          String   @id @default(cuid())
-  resourceId  String   @unique
-  views       Int      @default(0)
-  downloads   Int      @default(0)
-  votes       Int      @default(0)
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  resourceId String   @unique
+  views      Int      @default(0)
+  downloads  Int      @default(0)
+  votes      Int      @default(0)
+  updatedAt  DateTime @updatedAt
 
   resource AcademicResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 }
@@ -486,7 +569,7 @@ model ResourceAuditLog {
   resourceId String
   userId     String
   subjectId  String
-  action     String   // CREATE | UPDATE | DELETE | VOTE
+  action     String // CREATE | UPDATE | DELETE | VOTE
   metadata   Json?
   createdAt  DateTime @default(now())
 
@@ -514,7 +597,7 @@ enum CanalRecordatorioSesion {
 }
 
 model SesionEstudioSerie {
-  id               String   @id @default(cuid())
+  id               String              @id @default(cuid())
   title            String
   description      String?
   subjectId        String
@@ -525,19 +608,19 @@ model SesionEstudioSerie {
   reminderMinutes  Json?
   status           EstadoSesionEstudio @default(SCHEDULED)
   canceledAt       DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
-  subject   Subject             @relation("StudySessionSeriesSubject", fields: [subjectId], references: [id], onDelete: Cascade)
-  creator   User                @relation("StudySessionSeriesCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  sessions  SesionEstudioBase[]
+  subject  Subject             @relation("StudySessionSeriesSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  creator  User                @relation("StudySessionSeriesCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  sessions SesionEstudioBase[]
 
   @@index([creatorId, baseStartAt])
   @@index([subjectId, baseStartAt])
 }
 
 model SesionEstudioBase {
-  id                 String   @id @default(cuid())
+  id                 String              @id @default(cuid())
   seriesId           String?
   title              String
   description        String?
@@ -546,16 +629,16 @@ model SesionEstudioBase {
   startAt            DateTime
   endAt              DateTime
   durationMinutes    Int
-  occurrenceIndex    Int      @default(0)
+  occurrenceIndex    Int                 @default(0)
   status             EstadoSesionEstudio @default(SCHEDULED)
   canceledAt         DateTime?
   cancellationReason String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
-  series      SesionEstudioSerie?        @relation(fields: [seriesId], references: [id], onDelete: SetNull)
-  subject     Subject                    @relation("StudySessionSubject", fields: [subjectId], references: [id], onDelete: Cascade)
-  creator     User                       @relation("StudySessionCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  series       SesionEstudioSerie?         @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  subject      Subject                     @relation("StudySessionSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  creator      User                        @relation("StudySessionCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   participants SesionEstudioParticipante[]
   reminders    SesionEstudioRecordatorio[]
 
@@ -572,24 +655,116 @@ model SesionEstudioParticipante {
   createdAt DateTime @default(now())
 
   session SesionEstudioBase @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([sessionId, userId])
   @@index([userId])
 }
 
 model SesionEstudioRecordatorio {
-  id             String   @id @default(cuid())
+  id             String                  @id @default(cuid())
   sessionId      String
   minutesBefore  Int
   scheduledAt    DateTime
   sentAt         DateTime?
   channel        CanalRecordatorioSesion @default(DATABASE)
   notificationId String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime                @default(now())
 
   session SesionEstudioBase @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, minutesBefore])
   @@index([scheduledAt, sentAt])
 }
+
+model N8nExecution {
+  id           String   @id @default(cuid())
+  workflowName String
+  startedAt    DateTime
+  finishedAt   DateTime
+  totalSent    Int      @default(0)
+  totalFailed  Int      @default(0)
+  durationMs   Int      @default(0)
+  status       String // success, partial_success, failed
+  createdAt    DateTime @default(now())
+
+  @@map("n8n_executions")
+}
+
+model EventReminderLog {
+  id           String   @id @default(cuid())
+  eventoId     String
+  userId       String
+  email        String
+  status       String // success, failed
+  errorMessage String?
+  sentAt       DateTime @default(now())
+
+  event Event @relation("EventReminderLogs", fields: [eventoId], references: [id], onDelete: Cascade)
+  user  User  @relation("UserEventReminderLogs", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([eventoId])
+  @@index([userId])
+  @@map("event_reminder_logs")
+}
+
+model WelcomeEmailLog {
+  id           String   @id @default(cuid())
+  userId       String
+  email        String
+  status       String   // success, failed, invalid_domain
+  retries      Int      @default(0)
+  errorMessage String?
+  sentAt       DateTime @default(now())
+
+  user         User     @relation("UserWelcomeEmailLogs", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([email])
+  @@map("welcome_email_logs")
+}
+
+model ChatbotAlert {
+  id              String   @id @default(cuid())
+  triggeredAt     DateTime @default(now())
+  totalResponses  Int
+  totalNegative   Int
+  percentage      Float
+  status          String   @default("ACTIVE") // ACTIVE, RESOLVED
+  resolvedAt      DateTime?
+
+  @@index([status])
+  @@index([triggeredAt])
+  @@map("chatbot_alerts")
+}
+
+model ModerationAuditLog {
+  id             String   @id @default(cuid())
+  userId         String
+  handler        String
+  moderationCode String
+  timestamp      DateTime @default(now())
+  chatId         String?
+  messageSnippet String
+  metadata       Json?
+
+  user           User     @relation("UserModerationLogs", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([moderationCode])
+  @@map("moderation_audit_logs")
+}
+
+model UserBlock {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  blockedUntil DateTime
+  createdAt    DateTime @default(now())
+  reason       String?
+
+  user         User     @relation("UserBlocks", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_blocks")
+}
+

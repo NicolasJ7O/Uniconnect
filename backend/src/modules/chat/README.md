@@ -145,3 +145,92 @@ chatSubject.notify('NUEVO_MENSAJE', {
   message: mensajeDecoradoDTO
 });
 ```
+
+---
+
+## 4. Patrón Chain of Responsibility (Moderación de Mensajes)
+
+Implementado en el **Sprint 4**, este patrón procesa obligatoriamente todo mensaje enviado (privado o grupal) a través de una canalización ordenada de handlers antes de autorizar su almacenamiento y emisión por Socket.io.
+
+### Pipeline de Moderación:
+La ejecución de la cadena sigue el orden secuencial estricto:
+`LongitudHandler` ➔ `PalabrasProhibidasHandler` ➔ `SpamHandler` ➔ `EnlacesExternosHandler` ➔ `PersistenciaHandler`
+
+1. **`LongitudHandler` (Código `MO_001`)**: Rechaza mensajes que excedan los 1000 caracteres, deteniendo el pipeline de forma inmediata.
+2. **`PalabrasProhibidasHandler` (Código `MO_002`)**: Escanea el mensaje contra una lista configurable de palabras inapropiadas. Si detecta alguna, rechaza el mensaje guardando el término específico en la auditoría sin revelarlo al usuario.
+3. **`SpamHandler` (Código `MO_003`)**: Controla que un usuario no envíe más de 5 mensajes en menos de 30 segundos. Si infringe la regla, persiste un bloqueo por 5 minutos en `UserBlock` y rechaza cualquier mensaje subsiguiente mientras el bloqueo permanezca activo.
+4. **`EnlacesExternosHandler` (Código `MO_004`)**: Verifica todos los hipervínculos del mensaje. Solo se permiten dominios especificados en la whitelist institucional (ej. `ucaldas.edu.co`, `github.com`).
+5. **`PersistenciaHandler`**: El handler final de ejecución exitosa. Persiste el mensaje en la base de datos, aplica decoradores del Sprint 3 y notifica a los observers para la emisión por WebSocket.
+
+### Diagrama UML de Clases (Chain of Responsibility)
+```mermaid
+classDiagram
+    class ModerationContext {
+        +userId: string
+        +content: string
+        +chatId: string
+        +isPrivate: boolean
+        +fileUrl: string
+        +fileName: string
+        +fileType: string
+        +poll: object
+        +ip: string
+        +metadata: any
+    }
+
+    class ModerationResult {
+        +approved: boolean
+        +moderationCode: string
+        +message: string
+        +handler: string
+        +savedMessage: any
+    }
+
+    class ModerationHandler {
+        <<abstract>>
+        -nextHandler: ModerationHandler
+        +setNext(handler: ModerationHandler) ModerationHandler
+        +handle(ctx: ModerationContext) ModerationResult
+        #process(ctx: ModerationContext) ModerationResult*
+    }
+
+    class LongitudHandler {
+        #process(ctx: ModerationContext) ModerationResult
+    }
+
+    class PalabrasProhibidasHandler {
+        #process(ctx: ModerationContext) ModerationResult
+    }
+
+    class SpamHandler {
+        #process(ctx: ModerationContext) ModerationResult
+    }
+
+    class EnlacesExternosHandler {
+        #process(ctx: ModerationContext) ModerationResult
+    }
+
+    class PersistenciaHandler {
+        #process(ctx: ModerationContext) ModerationResult
+    }
+
+    ModerationHandler <|-- LongitudHandler : Inherits
+    ModerationHandler <|-- PalabrasProhibidasHandler : Inherits
+    ModerationHandler <|-- SpamHandler : Inherits
+    ModerationHandler <|-- EnlacesExternosHandler : Inherits
+    ModerationHandler <|-- PersistenciaHandler : Inherits
+    ModerationHandler o--> ModerationHandler : Links next
+```
+
+### Registro de Auditoría y Control de Persistencia
+Si cualquier handler de la cadena rechaza un mensaje:
+- **No se almacena** en la tabla de `Message`.
+- **No se emite** a otros usuarios vía Socket.io.
+- Se registra de forma automática la incidencia en la tabla `ModerationAuditLog` incluyendo:
+  - Remitente (`userId`)
+  - Identificador de Chat (`chatId`)
+  - Fragmento anonimizado del mensaje (ej: `hol...nte`)
+  - Código de error de moderación (`moderationCode`)
+  - Handler que procesó el rechazo
+  - Metadatos del cliente (ej: Dirección IP, User Agent)
+

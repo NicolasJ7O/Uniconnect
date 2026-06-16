@@ -12,3 +12,15 @@ export class AppError extends Error {
     Error.captureStackTrace(this, this.constructor);
   }
 }
+
+export class ModerationError extends AppError {
+  public readonly moderationCode: string;
+
+  constructor(moderationCode: string, message: string) {
+    super(400, message);
+    this.name = 'ModerationError';
+    this.moderationCode = moderationCode;
+    Object.setPrototypeOf(this, ModerationError.prototype);
+  }
+}
+

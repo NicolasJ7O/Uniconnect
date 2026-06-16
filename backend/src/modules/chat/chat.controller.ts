@@ -48,6 +48,8 @@ export class ChatController {
         fileName,
         fileType,
         poll,
+        ip: req.ip || req.socket.remoteAddress || undefined,
+        metadata: { userAgent: req.headers['user-agent'] },
       });
       return res.status(201).json(message);
     } catch (error) {
@@ -93,6 +95,8 @@ export class ChatController {
         fileUrl,
         fileName,
         fileType,
+        ip: req.ip || req.socket.remoteAddress || undefined,
+        metadata: { userAgent: req.headers['user-agent'] },
       });
       return res.status(201).json(message);
     } catch (error) {

@@ -22,12 +22,15 @@ export class LibraryRolePermissionHandler extends LibraryHandler {
 
     if (!user) throw new AppError(401, 'Usuario no encontrado');
 
-    if (ctx.action === 'MODERATE' && user.role !== 'moderator') {
+    const normalizedRole = (user.role || '').toLowerCase();
+    const isModerator = normalizedRole === 'moderator' || normalizedRole === 'moderador';
+
+    if (ctx.action === 'MODERATE' && !isModerator) {
       throw new AppError(403, 'Acción denegada: se requiere rol de moderador');
     }
 
     // For EDIT / DELETE: moderators bypass ownership check; others go to OwnershipHandler
-    if ((ctx.action === 'EDIT' || ctx.action === 'DELETE') && user.role === 'moderator') {
+    if ((ctx.action === 'EDIT' || ctx.action === 'DELETE') && isModerator) {
       // Moderators can act on any resource – skip ownership check by clearing resourceId
       ctx.resourceId = undefined;
     }

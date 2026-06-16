@@ -102,6 +102,9 @@ app.use('/chat', chatRouter);
 import { assistantRouter } from './modules/assistant/assistant.routes.js';
 app.use('/assistant', assistantRouter);
 
+import { adminRouter } from './modules/admin/admin.routes.js';
+app.use('/admin', adminRouter);
+
 import { eventRouter } from './modules/event/event.routes.js';
 app.use('/events', eventRouter);
 app.use('/eventos', eventRouter);

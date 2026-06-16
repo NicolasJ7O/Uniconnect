@@ -32,5 +32,6 @@ export const errorHandler = (
     success: false,
     message,
     statusCode,
+    ...(err.moderationCode ? { moderationCode: err.moderationCode } : {})
   });
 };

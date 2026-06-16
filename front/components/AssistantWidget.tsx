@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { assistantApi, type AssistantMessage, type AssistantSendResponse } from '@/lib/assistant-api';
+import { assistantFeedbackApi } from '@/lib/assistant-feedback-api';
 import type { SessionData } from '@/lib/session';
 
 type AssistantWidgetProps = {
@@ -23,6 +24,9 @@ export default function AssistantWidget({ session, roleLabel }: AssistantWidgetP
   const [isSending, setIsSending] = useState(false);
   const [isSlow, setIsSlow] = useState(false);
   const [slowNotice, setSlowNotice] = useState(false);
+  const [feedbackDrafts, setFeedbackDrafts] = useState<Record<string, string>>({});
+  const [feedbackState, setFeedbackState] = useState<Record<string, 'USEFUL' | 'NOT_USEFUL' | 'SENT'>>({});
+  const [feedbackBusy, setFeedbackBusy] = useState<Record<string, boolean>>({});
   const flatListRef = useRef<FlatList<LocalMessage>>(null);
   const pendingTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
 
@@ -133,6 +137,35 @@ export default function AssistantWidget({ session, roleLabel }: AssistantWidgetP
     }
   };
 
+  const handleFeedback = async (message: LocalMessage, rating: 'USEFUL' | 'NOT_USEFUL') => {
+    const question = typeof message.metadata?.question === 'string' ? message.metadata.question : '';
+    const contextChunks = Array.isArray(message.metadata?.contextChunks) ? message.metadata.contextChunks : [];
+
+    if (!question || !message.id) {
+      return;
+    }
+
+    setFeedbackBusy((prev) => ({ ...prev, [message.id]: true }));
+
+    try {
+      await assistantFeedbackApi.submit({
+        assistantMessageId: message.id,
+        sessionId: sessionKey,
+        question,
+        answer: message.content,
+        rating,
+        comment: feedbackDrafts[message.id]?.trim() || undefined,
+        chunks: contextChunks,
+      });
+
+      setFeedbackState((prev) => ({ ...prev, [message.id]: 'SENT' }));
+    } catch (error) {
+      console.error('Error submitting assistant feedback', error);
+    } finally {
+      setFeedbackBusy((prev) => ({ ...prev, [message.id]: false }));
+    }
+  };
+
   const renderItem = ({ item }: { item: LocalMessage }) => {
     const isUser = item.speakerRole === 'user';
     const isSystem = item.speakerRole === 'system';
@@ -164,6 +197,37 @@ export default function AssistantWidget({ session, roleLabel }: AssistantWidgetP
                   <Text style={styles.referenceChipText} numberOfLines={2}>{reference.reference}</Text>
                 </View>
               ))}
+            </View>
+          )}
+
+          {item.speakerRole === 'assistant' && (
+            <View style={styles.feedbackSection}>
+              <Text style={styles.feedbackHint}>¿Fue útil esta respuesta?</Text>
+              <View style={styles.feedbackRow}>
+                <Pressable
+                  style={[styles.feedbackButton, styles.feedbackUseful, feedbackBusy[item.id] && styles.feedbackButtonDisabled]}
+                  onPress={() => void handleFeedback(item, 'USEFUL')}
+                  disabled={feedbackBusy[item.id]}
+                >
+                  <Text style={styles.feedbackButtonText}>Útil</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.feedbackButton, styles.feedbackNotUseful, feedbackBusy[item.id] && styles.feedbackButtonDisabled]}
+                  onPress={() => void handleFeedback(item, 'NOT_USEFUL')}
+                  disabled={feedbackBusy[item.id]}
+                >
+                  <Text style={styles.feedbackButtonText}>No útil</Text>
+                </Pressable>
+              </View>
+              <TextInput
+                value={feedbackDrafts[item.id] ?? ''}
+                onChangeText={(text) => setFeedbackDrafts((prev) => ({ ...prev, [item.id]: text }))}
+                placeholder="Comentario opcional"
+                placeholderTextColor="#94a3b8"
+                style={styles.feedbackInput}
+                multiline
+              />
+              {feedbackState[item.id] === 'SENT' && <Text style={styles.feedbackSaved}>Feedback enviado y registrado.</Text>}
             </View>
           )}
         </View>
@@ -396,6 +460,54 @@ const styles = StyleSheet.create({
   typingText: {
     fontSize: 12,
     color: '#475569',
+  },
+  feedbackSection: {
+    marginTop: 10,
+    gap: 8,
+  },
+  feedbackHint: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '700',
+  },
+  feedbackRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  feedbackButton: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  feedbackUseful: {
+    backgroundColor: '#dcfce7',
+  },
+  feedbackNotUseful: {
+    backgroundColor: '#fee2e2',
+  },
+  feedbackButtonText: {
+    fontSize: 12,
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  feedbackButtonDisabled: {
+    opacity: 0.6,
+  },
+  feedbackInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
+    color: '#0f172a',
+    backgroundColor: '#fff',
+  },
+  feedbackSaved: {
+    fontSize: 11,
+    color: '#15803d',
   },
   slowNotice: {
     flexDirection: 'row',

@@ -22,7 +22,14 @@ const ALL_CATEGORIES_FILTER = ['TODOS', ...CATEGORIES] as const;
 export default function EventsScreen() {
   const [events, setEvents] = useState<UniversityEvent[]>([]);
   const [subscriptions, setSubscriptions] = useState<string[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('TODOS');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [searchText, setSearchText] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'full'>('all');
+  const [page, setPage] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -56,24 +63,44 @@ export default function EventsScreen() {
       setEvents(prev => prev.filter(e => e.id !== data.id));
     };
 
+    const handleAttendanceUpdated = (data: { eventId: string; attendanceCount: number; isAttending: boolean; attendees: any[] }) => {
+      setEvents(prev => prev.map(event =>
+        event.id === data.eventId
+          ? { ...event, attendanceCount: data.attendanceCount, isAttending: data.isAttending, attendees: data.attendees }
+          : event
+      ));
+    };
+
     socket.on('new-event', handleNewEvent);
     socket.on('delete-event', handleDeleteEvent);
+    socket.on('attendance-updated', handleAttendanceUpdated);
 
     return () => {
       socket.off('new-event', handleNewEvent);
       socket.off('delete-event', handleDeleteEvent);
+      socket.off('attendance-updated', handleAttendanceUpdated);
     };
   }, [socket]);
 
   const loadData = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      const [eventsData, subsData, profileData] = await Promise.all([
-        eventApi.getEvents(),
+      const [eventsResponse, subsData, profileData] = await Promise.all([
+        eventApi.getEvents({
+          categories: selectedCategories.length ? selectedCategories : undefined,
+          search: searchText.trim() || undefined,
+          fromDate: fromDate || undefined,
+          toDate: toDate || undefined,
+          availability: availabilityFilter === 'all' ? undefined : availabilityFilter,
+          limit: 10,
+          offset: (page - 1) * 10,
+        }),
         eventApi.getMySubscriptions(),
         getStudentProfile().catch(() => null),
       ]);
-      setEvents(eventsData);
+      setEvents(eventsResponse.items);
+      setTotalResults(eventsResponse.total);
+      setHasMore(eventsResponse.hasMore);
       setSubscriptions(subsData);
       if (profileData) {
         setCurrentUserId(profileData.id);
@@ -85,16 +112,33 @@ export default function EventsScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [showToast]);
+  }, [availabilityFilter, fromDate, page, searchText, selectedCategories, showToast, toDate]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      void loadData(true);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchText]);
+
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
     void loadData(true);
   }, [loadData]);
+
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories(prev => {
+      if (cat === 'TODOS') return [];
+      if (prev.includes(cat)) return prev.filter(item => item !== cat);
+      return [...prev, cat];
+    });
+    setPage(1);
+  };
 
   const handleToggleSubscription = async (cat: string) => {
     const isSubscribed = subscriptions.includes(cat);
@@ -160,6 +204,36 @@ export default function EventsScreen() {
     }
   };
 
+  const handleToggleAttendance = async (event: UniversityEvent) => {
+    try {
+      const result = event.isAttending
+        ? await eventApi.cancelAttendance(event.id)
+        : await eventApi.toggleAttendance(event.id);
+
+      setEvents(prev => prev.map(item => {
+        if (item.id !== event.id) return item;
+
+        const nextAttendees = result.attending
+          ? item.attendees.some((attendee) => attendee.id === currentUserId)
+            ? item.attendees
+            : [...item.attendees, { id: currentUserId ?? 'me', name: 'Tú', email: '' }]
+          : item.attendees.filter((attendee) => attendee.id !== currentUserId);
+
+        return {
+          ...item,
+          attendanceCount: result.attendanceCount,
+          isAttending: result.attending,
+          attendees: nextAttendees,
+        };
+      }));
+
+      showToast(result.attending ? '¡Asistencia registrada!' : 'Asistencia cancelada', 'success');
+    } catch (e) {
+      console.error('Error toggling attendance', e);
+      showToast('No se pudo actualizar tu asistencia', 'error');
+    }
+  };
+
   const handleDeleteEvent = async (eventId: string) => {
     try {
       await eventApi.deleteEvent(eventId);
@@ -170,12 +244,6 @@ export default function EventsScreen() {
       showToast('No se pudo eliminar el evento', 'error');
     }
   };
-
-  // Filter events reactively in the frontend
-  const filteredEvents = events.filter(e => {
-    if (selectedCategory === 'TODOS') return true;
-    return e.category === selectedCategory;
-  });
 
   const getCategoryColor = (cat: string) => {
     switch (cat) {
@@ -228,7 +296,7 @@ export default function EventsScreen() {
           contentContainerStyle={styles.categoriesScroll}
         >
           {ALL_CATEGORIES_FILTER.map(cat => {
-            const isSelected = selectedCategory === cat;
+            const isSelected = cat === 'TODOS' ? selectedCategories.length === 0 : selectedCategories.includes(cat);
             const isSubscribed = cat !== 'TODOS' && subscriptions.includes(cat);
             return (
               <View key={cat} style={styles.chipWrapper}>
@@ -237,7 +305,7 @@ export default function EventsScreen() {
                     styles.categoryChip,
                     isSelected && { backgroundColor: getCategoryColor(cat), borderColor: getCategoryColor(cat) },
                   ]}
-                  onPress={() => setSelectedCategory(cat)}
+                  onPress={() => toggleCategory(cat)}
                 >
                   <Text style={[styles.categoryChipText, isSelected && styles.categoryChipTextActive]}>
                     {cat}
@@ -262,6 +330,42 @@ export default function EventsScreen() {
         </ScrollView>
       </View>
 
+      <View style={styles.filterPanel}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Buscar por título o descripción"
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+        <View style={styles.filterRow}>
+          <TextInput
+            style={[styles.dateInput, { flex: 1, marginRight: 8 }]}
+            placeholder="Desde (YYYY-MM-DD)"
+            value={fromDate}
+            onChangeText={setFromDate}
+          />
+          <TextInput
+            style={[styles.dateInput, { flex: 1 }]}
+            placeholder="Hasta (YYYY-MM-DD)"
+            value={toDate}
+            onChangeText={setToDate}
+          />
+        </View>
+        <View style={styles.filterRow}>
+          {(['all', 'available', 'full'] as const).map(option => (
+            <Pressable
+              key={option}
+              style={[styles.availabilityChip, availabilityFilter === option && styles.availabilityChipActive]}
+              onPress={() => { setAvailabilityFilter(option); setPage(1); }}
+            >
+              <Text style={[styles.availabilityChipText, availabilityFilter === option && styles.availabilityChipTextActive]}>
+                {option === 'all' ? 'Todos' : option === 'available' ? 'Disponibles' : 'Cupo agotado'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
       {/* Events List */}
       <ScrollView
         style={styles.eventsScroll}
@@ -269,28 +373,35 @@ export default function EventsScreen() {
       >
         <View style={styles.listHeader}>
           <Text style={styles.eventsCountText}>
-            {filteredEvents.length} {filteredEvents.length === 1 ? 'evento disponible' : 'eventos disponibles'}
+            {totalResults} {totalResults === 1 ? 'evento disponible' : 'eventos disponibles'}
           </Text>
           <Pressable style={styles.createBtn} onPress={() => setIsModalOpen(true)}>
             <Text style={styles.createBtnText}>+ Crear Evento</Text>
           </Pressable>
         </View>
 
-        {filteredEvents.length === 0 ? (
+        {events.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No hay eventos en esta categoría.</Text>
             <Text style={styles.emptySubtitle}>¡Sé el primero en publicar uno!</Text>
           </View>
         ) : (
-          filteredEvents.map(item => {
+          events.map(item => {
             const isOrganizer = currentUserId === item.organizerId;
             return (
               <View key={item.id} style={styles.eventCard}>
                 <View style={styles.cardHeader}>
-                  <View
-                    style={[styles.categoryBadge, { backgroundColor: getCategoryColor(item.category) }]}
-                  >
-                    <Text style={styles.categoryBadgeText}>{item.category}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View
+                      style={[styles.categoryBadge, { backgroundColor: getCategoryColor(item.category) }]}
+                    >
+                      <Text style={styles.categoryBadgeText}>{item.category}</Text>
+                    </View>
+                    {item.isFull && (
+                      <View style={styles.fullBadge}>
+                        <Text style={styles.fullBadgeText}>Cupo agotado</Text>
+                      </View>
+                    )}
                   </View>
                   {isOrganizer && (
                     <Pressable
@@ -321,9 +432,51 @@ export default function EventsScreen() {
                   <Text style={styles.metaLabel}>👤 Organizado por:</Text>
                   <Text style={styles.metaValue}>{item.organizer?.name || 'Estudiante'}</Text>
                 </View>
+
+                <View style={styles.eventMetaRow}>
+                  <Text style={styles.metaLabel}>👥 Asistentes:</Text>
+                  <Text style={styles.metaValue}>{item.attendanceCount || 0} confirmados</Text>
+                </View>
+
+                {item.attendees.length > 0 && (
+                  <View style={styles.attendeesContainer}>
+                    <Text style={styles.attendeesText}>
+                      {item.attendees.map((attendee) => attendee.name || attendee.email || 'Estudiante').join(', ')}
+                    </Text>
+                  </View>
+                )}
+
+                <Pressable
+                  style={[styles.attendanceButton, (item.isFull && !item.isAttending) && styles.attendanceButtonDisabled, item.isAttending && styles.attendanceButtonActive]}
+                  onPress={() => handleToggleAttendance(item)}
+                  disabled={item.isFull && !item.isAttending}
+                >
+                  <Text style={[styles.attendanceButtonText, item.isAttending && styles.attendanceButtonTextActive]}>
+                    {item.isFull && !item.isAttending ? 'Cupo agotado' : item.isAttending ? 'Cancelar asistencia' : 'Voy a asistir'}
+                  </Text>
+                </Pressable>
               </View>
             );
           })
+        )}
+        {hasMore && (
+          <View style={styles.paginationRow}>
+            <Pressable
+              style={[styles.paginationBtn, page === 1 && styles.paginationBtnDisabled]}
+              onPress={() => setPage(prev => Math.max(1, prev - 1))}
+              disabled={page === 1}
+            >
+              <Text style={styles.paginationBtnText}>Anterior</Text>
+            </Pressable>
+            <Text style={styles.paginationInfo}>Página {page}</Text>
+            <Pressable
+              style={[styles.paginationBtn, !hasMore && styles.paginationBtnDisabled]}
+              onPress={() => setPage(prev => prev + 1)}
+              disabled={!hasMore}
+            >
+              <Text style={styles.paginationBtnText}>Siguiente</Text>
+            </Pressable>
+          </View>
         )}
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -505,6 +658,63 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
   },
+  filterPanel: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0f172a',
+    backgroundColor: '#f8fafc',
+    marginBottom: 8,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  dateInput: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#0f172a',
+    backgroundColor: '#f8fafc',
+  },
+  availabilityChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 999,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginRight: 6,
+    backgroundColor: '#f8fafc',
+  },
+  availabilityChipActive: {
+    backgroundColor: '#003e70',
+    borderColor: '#003e70',
+  },
+  availabilityChipText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  availabilityChipTextActive: {
+    color: '#ffffff',
+  },
   listHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -515,6 +725,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748b',
     fontWeight: '500',
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  paginationBtn: {
+    backgroundColor: '#003e70',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  paginationBtnDisabled: {
+    backgroundColor: '#cbd5e1',
+  },
+  paginationBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  paginationInfo: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
   },
   createBtn: {
     backgroundColor: '#0284c7',
@@ -582,6 +818,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
+  fullBadge: {
+    backgroundColor: '#fee2e2',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  fullBadgeText: {
+    color: '#b91c1c',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   deleteCardBtn: {
     paddingVertical: 4,
     paddingHorizontal: 8,
@@ -620,6 +867,42 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1e293b',
     flex: 1,
+  },
+  attendeesContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  attendeesText: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 18,
+  },
+  attendanceButton: {
+    marginTop: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#0284c7',
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+  },
+  attendanceButtonDisabled: {
+    backgroundColor: '#e2e8f0',
+    borderColor: '#cbd5e1',
+  },
+  attendanceButtonActive: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#ef4444',
+  },
+  attendanceButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0284c7',
+  },
+  attendanceButtonTextActive: {
+    color: '#dc2626',
   },
   modalOverlay: {
     flex: 1,

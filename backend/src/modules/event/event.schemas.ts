@@ -8,6 +8,8 @@ export const createEventSchema = z.object({
     description: z.string().min(5).max(1000),
     eventDate: z.string().datetime(),
     location: z.string().max(300).optional(),
+    isPrivate: z.boolean().optional().default(false),
+    categoryId: z.string().cuid().optional(),
     category: z.preprocess(
         (val) => (typeof val === 'string' ? val.toUpperCase() : val),
         z.enum(EVENT_CATEGORIES)

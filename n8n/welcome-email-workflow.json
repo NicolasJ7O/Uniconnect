@@ -1,0 +1,370 @@
+{
+  "name": "Correo de Bienvenida Automatizado (HU-N8N02)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "usuario-verificado",
+        "options": {}
+      },
+      "id": "c138f5f6-cbb1-4c12-9c76-5d6c8b9d3b14",
+      "name": "Webhook: usuario.verificado",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "usuario-verificado"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.email }}",
+              "operation": "endsWith",
+              "value2": "@ucaldas.edu.co"
+            }
+          ]
+        }
+      },
+      "id": "e98e4d3f-5d66-48bc-b2b9-e1f2b2b11a93",
+      "name": "IF: Dominio Institucional?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO welcome_email_logs (id, \"userId\", email, status, \"errorMessage\", \"sentAt\") VALUES (gen_random_uuid(), '{{ $json.body.userId }}', '{{ $json.body.email }}', 'invalid_domain', 'No pertenece al dominio ucaldas.edu.co', NOW());",
+        "options": {}
+      },
+      "id": "31b1c73a-bc42-493e-b8d4-8d484b802613",
+      "name": "Postgres: Log Dominio Inválido",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [
+        650,
+        500
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "minutes"
+      },
+      "id": "b96dc36b-2720-4e17-b70c-255d1c2dc5a7",
+      "name": "Wait (5 Min)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        650,
+        100
+      ],
+      "webhookId": "wait-id-welcome"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id FROM welcome_email_logs WHERE \"userId\" = '{{ $json.body.userId }}' AND status = 'success';",
+        "options": {}
+      },
+      "id": "cd0b61cc-02fb-4632-bd90-1c050b181b5f",
+      "name": "Postgres: Verificar Idempotencia",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [
+        850,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "52f75d65-4f36-407e-b7d1-eecb8f4112e4",
+      "name": "IF: Ya se envió?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1050,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $node[\"Webhook: usuario.verificado\"].json.body.email }}",
+        "subject": "¡Bienvenido a UniConnect, {{ $node[\"Webhook: usuario.verificado\"].json.body.name }}!",
+        "emailType": "html",
+        "message": "=<!DOCTYPE html>\n<html>\n<head>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<style>\n  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f8f9fa; padding: 20px; margin: 0; }\n  .container { background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }\n  .logo { text-align: center; margin-bottom: 20px; font-size: 24px; font-weight: bold; color: #0f172a; }\n  h1 { color: #1e293b; font-size: 22px; }\n  p { color: #475569; line-height: 1.6; font-size: 16px; }\n  .steps { background-color: #f1f5f9; padding: 15px 20px; border-radius: 6px; margin: 20px 0; }\n  .steps ol { margin: 0; padding-left: 20px; color: #334155; }\n  .steps li { margin-bottom: 10px; }\n  .btn-container { text-align: center; margin-top: 30px; }\n  .button { display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; }\n  @media only screen and (max-width: 600px) {\n    .container { padding: 20px; }\n    h1 { font-size: 20px; }\n  }\n</style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"logo\">🎓 UniConnect</div>\n    <h1>¡Hola {{ $node[\"Webhook: usuario.verificado\"].json.body.name }}!</h1>\n    <p>Estamos muy felices de darte la bienvenida oficial a <strong>UniConnect</strong>, la plataforma donde podrás gestionar tu vida académica y extracurricular en la Universidad.</p>\n    <div class=\"steps\">\n      <p><strong>Para empezar con el pie derecho, te recomendamos 3 sencillos pasos:</strong></p>\n      <ol>\n        <li>Completa tu perfil académico con tu carrera y semestre.</li>\n        <li>Explora los grupos de estudio de tus materias.</li>\n        <li>Revisa la agenda de próximos eventos universitarios.</li>\n      </ol>\n    </div>\n    <div class=\"btn-container\">\n      <a href=\"https://uniconnect.com/dashboard\" class=\"button\">Ir a mi Dashboard</a>\n    </div>\n    <p style=\"margin-top: 30px; font-size: 14px; color: #94a3b8; text-align: center;\">\n      Si tienes alguna duda, no dudes en contactarnos.<br>El equipo de UniConnect.\n    </p>\n  </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "90e0b7cb-61cc-4f10-9b48-18eddc558452",
+      "name": "Gmail: Correo Bienvenida",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1250,
+        250
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-cred-id",
+          "name": "Gmail Account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.messageId }}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "id": "31b1c73b-cc42-493e-b8d4-8d484b802613",
+      "name": "IF: Error Gmail?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1450,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO welcome_email_logs (id, \"userId\", email, status, \"errorMessage\", \"sentAt\") VALUES (gen_random_uuid(), '{{ $node[\"Webhook: usuario.verificado\"].json.body.userId }}', '{{ $node[\"Webhook: usuario.verificado\"].json.body.email }}', 'success', NULL, NOW());",
+        "options": {}
+      },
+      "id": "e818b456-cc42-493e-b8d4-8d484b802613",
+      "name": "Postgres: Log Exitoso",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [
+        1650,
+        350
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO welcome_email_logs (id, \"userId\", email, status, \"errorMessage\", \"sentAt\") VALUES (gen_random_uuid(), '{{ $node[\"Webhook: usuario.verificado\"].json.body.userId }}', '{{ $node[\"Webhook: usuario.verificado\"].json.body.email }}', 'failed', '{{ $json.error.message || \"Fallo al enviar correo\" }}', NOW());",
+        "options": {}
+      },
+      "id": "52f75d65-4f36-407e-b7d1-eecb8f4112e4_failed",
+      "name": "Postgres: Log Fallido",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [
+        1650,
+        150
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO n8n_executions (id, \"workflowName\", \"startedAt\", \"finishedAt\", \"totalSent\", \"totalFailed\", \"durationMs\", status, \"createdAt\") VALUES (gen_random_uuid(), 'HU-N8N02: Bienvenida', NOW(), NOW(), 1, 0, 0, 'success', NOW());",
+        "options": {}
+      },
+      "id": "exec_log_success",
+      "name": "Postgres: Exec Success",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [
+        1850,
+        350
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO n8n_executions (id, \"workflowName\", \"startedAt\", \"finishedAt\", \"totalSent\", \"totalFailed\", \"durationMs\", status, \"createdAt\") VALUES (gen_random_uuid(), 'HU-N8N02: Bienvenida', NOW(), NOW(), 0, 1, 0, 'failed', NOW());",
+        "options": {}
+      },
+      "id": "exec_log_failed",
+      "name": "Postgres: Exec Failed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [
+        1850,
+        150
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: usuario.verificado": {
+      "main": [
+        [
+          {
+            "node": "IF: Dominio Institucional?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Dominio Institucional?": {
+      "main": [
+        [
+          {
+            "node": "Wait (5 Min)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Postgres: Log Dominio Inválido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait (5 Min)": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Verificar Idempotencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Verificar Idempotencia": {
+      "main": [
+        [
+          {
+            "node": "IF: Ya se envió?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Ya se envió?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Gmail: Correo Bienvenida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Correo Bienvenida": {
+      "main": [
+        [
+          {
+            "node": "IF: Error Gmail?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Error Gmail?": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Log Fallido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Postgres: Log Exitoso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Log Fallido": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Exec Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Log Exitoso": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Exec Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "timezone": "America/Bogota"
+  }
+}

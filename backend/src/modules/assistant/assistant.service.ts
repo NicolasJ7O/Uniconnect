@@ -1,7 +1,9 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { AppError } from '../../errors/app-error.js';
+import { Logger } from '../../lib/logger.js';
 import { prisma } from '../../lib/prisma.js';
 import { assistantKnowledgeBase, type AssistantKnowledgeChunk, type AssistantRole } from './assistant.content.js';
+import { AdminPromptStrategy, EstudiantePromptStrategy, PromptStrategyContext, PromptStrategyResolutionError, type PromptStrategyContextData } from './prompt-strategy.js';
 
 type AssistantDatabase = PrismaClient | Prisma.TransactionClient;
 
@@ -23,10 +25,13 @@ const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5-coder:3b';
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 12000);
 const MAX_CONTEXT_MESSAGES = 8;
+const promptStrategyContext = new PromptStrategyContext();
+const logger = Logger.getInstance();
 
 const ROLE_ALIASES: Record<string, AssistantRole> = {
   student: 'student',
   moderator: 'moderator',
+  moderador: 'moderator',
   admin: 'super_admin',
   super_admin: 'super_admin',
 };
@@ -176,6 +181,25 @@ function buildSourceMetadata(chunks: AssistantKnowledgeChunk[]) {
   }));
 }
 
+function serializeContextChunks(chunks: AssistantKnowledgeChunk[]) {
+  return chunks.map((chunk) => ({
+    reference: chunk.reference,
+    title: chunk.title,
+    summary: chunk.summary,
+    content: chunk.content,
+    keywords: chunk.keywords,
+    audience: chunk.audience,
+  }));
+}
+
+function getFallbackPromptStrategy(role: AssistantRole) {
+  if (role === 'super_admin') {
+    return new AdminPromptStrategy();
+  }
+
+  return new EstudiantePromptStrategy();
+}
+
 function buildFallbackResponse(role: AssistantRole, chunks: AssistantKnowledgeChunk[]) {
   const references = buildSourceMetadata(chunks);
   const topicSummary = chunks
@@ -197,24 +221,36 @@ async function callOllamaIfAvailable(payload: {
   history: Array<{ role: string; content: string }>;
   chunks: AssistantKnowledgeChunk[];
 }) {
-  const contextBlock = payload.chunks.map((chunk) => `[${chunk.reference}] ${chunk.content}`).join('\n\n');
-  const historyBlock = payload.history
-    .map((entry) => `${entry.role.toUpperCase()}: ${entry.content}`)
-    .join('\n');
+  const strategyContextData: PromptStrategyContextData = {
+    role: payload.role,
+    query: payload.query,
+    sessionHistory: payload.history,
+    knowledgeChunks: payload.chunks,
+  };
 
-  const systemPrompt = [
-    'Eres el asistente contextual de UniConnect.',
-    `Responde en español como si fueras un asistente para el rol ${payload.role}.`,
-    'Solo puedes responder sobre funcionalidades, políticas, módulos, configuración y operación de UniConnect.',
-    'Si la consulta es ajena a UniConnect, responde con una restricción elegante y breve.',
-    'Incluye al final una línea con las referencias consultadas en formato: Referencias consultadas: ...',
-    'Prioriza la información del contexto recuperado y usa el historial reciente solo para mantener la conversación coherente.',
-    'Si el usuario es moderator o super_admin, da preferencia a contexto técnico y de administración.',
-  ].join(' ');
+  let systemPrompt: string;
+  try {
+    systemPrompt = promptStrategyContext.buildSystemPrompt(strategyContextData);
+  } catch (error) {
+    if (error instanceof PromptStrategyResolutionError) {
+      logger.error('Falling back to safe prompt strategy', {
+        role: payload.role,
+        error: error.message,
+      });
+      systemPrompt = getFallbackPromptStrategy(payload.role).buildSystemPrompt(strategyContextData);
+    } else {
+      throw error;
+    }
+  }
 
   const prompt = [
-    `Contexto de conocimiento recuperado:\n${contextBlock}`,
-    historyBlock ? `Historial reciente:\n${historyBlock}` : 'Historial reciente: sin conversaciones previas relevantes.',
+    'Contexto recuperado para la respuesta.',
+    payload.chunks.length > 0
+      ? payload.chunks.map((chunk) => `[${chunk.reference}] ${chunk.content}`).join('\n\n')
+      : 'No se recuperaron fragmentos de contexto relevantes.',
+    payload.history.length > 0
+      ? `Historial reciente:\n${payload.history.map((entry) => `${entry.role.toUpperCase()}: ${entry.content}`).join('\n')}`
+      : 'Historial reciente: sin conversaciones previas relevantes.',
     `Consulta actual:\n${payload.query}`,
   ].join('\n\n');
 
@@ -272,7 +308,11 @@ async function generateAssistantReply(input: {
 
   try {
     return await callOllamaIfAvailable(input);
-  } catch {
+  } catch (error) {
+    logger.error('Assistant pipeline failed; using fallback response', {
+      role: input.role,
+      error: error instanceof Error ? error.message : error,
+    });
     return buildFallbackResponse(input.role, input.chunks);
   }
 }
@@ -372,7 +412,9 @@ export async function sendAssistantMessage(userId: string, sessionKey: string, r
       metadata: {
         answerType: reply.answerType,
         role: normalizedRole,
+        question: trimmedQuery,
         references: reply.references,
+        contextChunks: serializeContextChunks(relevantChunks),
       },
     },
   });

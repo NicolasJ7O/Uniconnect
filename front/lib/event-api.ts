@@ -17,6 +17,19 @@ export interface UniversityEvent {
   createdAt: string;
   updatedAt: string;
   organizer: UserSummary;
+  capacity: number;
+  isFull: boolean;
+  attendanceCount: number;
+  isAttending: boolean;
+  attendees: UserSummary[];
+}
+
+export interface EventListResponse {
+  items: UniversityEvent[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
 }
 
 export interface CreateEventInput {
@@ -28,10 +41,16 @@ export interface CreateEventInput {
 }
 
 export const eventApi = {
-  getEvents: async (category?: string): Promise<UniversityEvent[]> => {
-    const res = await apiClient.get('/events', {
-      params: category && category !== 'TODOS' ? { category } : undefined,
-    });
+  getEvents: async (params?: {
+    categories?: string[];
+    search?: string;
+    fromDate?: string;
+    toDate?: string;
+    availability?: 'available' | 'full';
+    limit?: number;
+    offset?: number;
+  }): Promise<EventListResponse> => {
+    const res = await apiClient.get('/events', { params });
     return res.data;
   },
 
@@ -52,6 +71,16 @@ export const eventApi = {
 
   getMySubscriptions: async (): Promise<string[]> => {
     const res = await apiClient.get('/events/subscriptions');
+    return res.data;
+  },
+
+  toggleAttendance: async (id: string): Promise<{ eventId: string; attending: boolean; attendanceCount: number }> => {
+    const res = await apiClient.post(`/events/${id}/attendance`);
+    return res.data;
+  },
+
+  cancelAttendance: async (id: string): Promise<{ eventId: string; attending: boolean; attendanceCount: number }> => {
+    const res = await apiClient.delete(`/events/${id}/attendance`);
     return res.data;
   },
 

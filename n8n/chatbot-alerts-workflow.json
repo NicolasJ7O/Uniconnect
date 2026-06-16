@@ -1,0 +1,296 @@
+{
+  "name": "HU-N8N03: Alertas Automáticas Chatbot",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "trigger-schedule",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [ 200, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) as total_responses, COALESCE(SUM(CASE WHEN rating = 'NOT_USEFUL' THEN 1 ELSE 0 END), 0) as total_negative, COALESCE(ROUND( (SUM(CASE WHEN rating = 'NOT_USEFUL' THEN 1 ELSE 0 END)::decimal / NULLIF(COUNT(*), 0)) * 100, 2), 0) as percentage FROM \"AssistantFeedback\" WHERE \"createdAt\" >= NOW() - INTERVAL '24 hours';"
+      },
+      "id": "postgres-metricas",
+      "name": "Postgres: Metricas",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [ 400, 300 ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.percentage }}",
+              "operation": "larger",
+              "value2": 30
+            }
+          ]
+        }
+      },
+      "id": "if-threshold",
+      "name": "IF: Supera 30%?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 600, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE chatbot_alerts SET status = 'RESOLVED', \"resolvedAt\" = NOW() WHERE status = 'ACTIVE';"
+      },
+      "id": "postgres-resolve",
+      "name": "Postgres: Resolver Alertas",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [ 800, 500 ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT count(id) as recent_alerts FROM chatbot_alerts WHERE status = 'ACTIVE' AND \"triggeredAt\" >= NOW() - INTERVAL '6 hours';"
+      },
+      "id": "postgres-cooldown",
+      "name": "Postgres: Check Cooldown",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [ 800, 100 ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.recent_alerts }}",
+              "operation": "equal",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "if-cooldown",
+      "name": "IF: Cooldown Permite?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 1000, 100 ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT LOWER(TRIM(question)) as question, COUNT(*) as frequency FROM \"AssistantFeedback\" WHERE rating = 'NOT_USEFUL' AND \"createdAt\" >= NOW() - INTERVAL '24 hours' GROUP BY LOWER(TRIM(question)) ORDER BY frequency DESC LIMIT 5;"
+      },
+      "id": "postgres-top5",
+      "name": "Postgres: Top 5",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [ 1200, 0 ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItems",
+        "jsCode": "const items = $input.all();\nlet html = '<ul>';\nfor (const item of items) {\n  html += `<li><b>${item.json.frequency} veces:</b> ${item.json.question}</li>`;\n}\nhtml += '</ul>';\nreturn [{ json: { top5_html: html } }];"
+      },
+      "id": "code-format",
+      "name": "Code: Formato HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 1400, 0 ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO chatbot_alerts (id, \"triggeredAt\", \"totalResponses\", \"totalNegative\", percentage, status) VALUES (gen_random_uuid(), NOW(), {{ $node[\"Postgres: Metricas\"].json[\"total_responses\"] }}, {{ $node[\"Postgres: Metricas\"].json[\"total_negative\"] }}, {{ $node[\"Postgres: Metricas\"].json[\"percentage\"] }}, 'ACTIVE');"
+      },
+      "id": "postgres-insert-alert",
+      "name": "Postgres: Crear Alerta",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [ 1600, 0 ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "superadmin@ucaldas.edu.co",
+        "subject": "⚠️ ALERTA CHATBOT: {{ $node[\"Postgres: Metricas\"].json[\"percentage\"] }}% Feedback Negativo",
+        "emailType": "html",
+        "message": "=<h2>Alerta de Desempeño del Chatbot</h2>\n<p>Se ha detectado un alto volumen de feedback negativo (No útil) en las últimas 24 horas.</p>\n<ul>\n<li><b>Total de consultas:</b> {{ $node[\"Postgres: Metricas\"].json[\"total_responses\"] }}</li>\n<li><b>Total negativas:</b> {{ $node[\"Postgres: Metricas\"].json[\"total_negative\"] }}</li>\n<li><b>Porcentaje insatisfacción:</b> <span style=\"color:red; font-weight:bold;\">{{ $node[\"Postgres: Metricas\"].json[\"percentage\"] }}%</span></li>\n</ul>\n<h3>Top 5 Preguntas más problemáticas:</h3>\n{{ $node[\"Code: Formato HTML\"].json[\"top5_html\"] }}\n<br>\n<a href=\"https://uniconnect.com/admin/feedback\" style=\"padding:10px 15px; background:#e11d48; color:white; text-decoration:none; border-radius:5px;\">Ir al Panel Administrativo</a>"
+      },
+      "id": "gmail-alert",
+      "name": "Gmail: Enviar Alerta",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [ 1800, 0 ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 300000,
+      "continueOnFail": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-cred-id",
+          "name": "Gmail Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.error }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "if-gmail-error",
+      "name": "IF: Falló Gmail?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 2000, 0 ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "alerts-fallback@uniconnect.com",
+        "toEmail": "superadmin@ucaldas.edu.co",
+        "subject": "⚠️ ALERTA FALLBACK: Alto feedback negativo",
+        "html": "=<h2>Alerta Fallback (SMTP Contingencia)</h2>\n<p>Porcentaje: {{ $node[\"Postgres: Metricas\"].json[\"percentage\"] }}%</p>\n{{ $node[\"Code: Formato HTML\"].json[\"top5_html\"] }}"
+      },
+      "id": "smtp-fallback",
+      "name": "SMTP: Contingencia",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [ 2200, -100 ],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-cred-id",
+          "name": "SMTP Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO n8n_executions (id, \"workflowName\", \"startedAt\", \"finishedAt\", status, \"createdAt\") VALUES (gen_random_uuid(), 'HU-N8N03: Alertas Chatbot', NOW(), NOW(), 'success', NOW());"
+      },
+      "id": "postgres-exec-log",
+      "name": "Postgres: Ejecucion",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [ 2400, 0 ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred-id",
+          "name": "Uniconnect Postgres"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [ { "node": "Postgres: Metricas", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Postgres: Metricas": {
+      "main": [
+        [ { "node": "IF: Supera 30%?", "type": "main", "index": 0 } ]
+      ]
+    },
+    "IF: Supera 30%?": {
+      "main": [
+        [ { "node": "Postgres: Check Cooldown", "type": "main", "index": 0 } ],
+        [ { "node": "Postgres: Resolver Alertas", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Postgres: Check Cooldown": {
+      "main": [
+        [ { "node": "IF: Cooldown Permite?", "type": "main", "index": 0 } ]
+      ]
+    },
+    "IF: Cooldown Permite?": {
+      "main": [
+        [ { "node": "Postgres: Top 5", "type": "main", "index": 0 } ],
+        []
+      ]
+    },
+    "Postgres: Top 5": {
+      "main": [
+        [ { "node": "Code: Formato HTML", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Code: Formato HTML": {
+      "main": [
+        [ { "node": "Postgres: Crear Alerta", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Postgres: Crear Alerta": {
+      "main": [
+        [ { "node": "Gmail: Enviar Alerta", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Gmail: Enviar Alerta": {
+      "main": [
+        [ { "node": "IF: Falló Gmail?", "type": "main", "index": 0 } ]
+      ]
+    },
+    "IF: Falló Gmail?": {
+      "main": [
+        [ { "node": "SMTP: Contingencia", "type": "main", "index": 0 } ],
+        [ { "node": "Postgres: Ejecucion", "type": "main", "index": 0 } ]
+      ]
+    },
+    "SMTP: Contingencia": {
+      "main": [
+        [ { "node": "Postgres: Ejecucion", "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "timezone": "America/Bogota"
+  }
+}

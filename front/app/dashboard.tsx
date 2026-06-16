@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
 import { clearSession, loadSession, type SessionData } from '@/lib/session';
 import { getStudentProfile, getEnrichedStudentProfile, type StudentProfile } from '@/lib/student-api';
 import { chatApi, type Conversation } from '@/lib/chat-api';
@@ -8,6 +8,7 @@ import { logoutWithRefreshToken } from '@/lib/auth-api';
 import { useNotifications } from '@/context/NotificationContext';
 import { Ionicons } from '@expo/vector-icons';
 import AssistantWidget from '@/components/AssistantWidget';
+import { assistantFeedbackApi, type AssistantFeedbackReport } from '@/lib/assistant-feedback-api';
 
 function resolveRoleLabel(role: string) {
   if (role === 'student') return 'Estudiante';
@@ -21,7 +22,9 @@ export default function DashboardScreen() {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [enrichedProfile, setEnrichedProfile] = useState<any>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [feedbackReport, setFeedbackReport] = useState<AssistantFeedbackReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { reconnectSocket } = useNotifications();
 
@@ -49,6 +52,18 @@ export default function DashboardScreen() {
 
           const userConversations = await chatApi.getConversations();
           setConversations(userConversations);
+
+          if (stored.user.role === 'admin' || stored.user.role === 'super_admin') {
+            setIsLoadingFeedback(true);
+            try {
+              const report = await assistantFeedbackApi.getReport({ page: 1, pageSize: 6, rating: 'NOT_USEFUL' });
+              setFeedbackReport(report);
+            } catch (feedbackErr) {
+              console.error('Error loading feedback report', feedbackErr);
+            } finally {
+              setIsLoadingFeedback(false);
+            }
+          }
         } catch (e) {
           console.error('Error fetching dashboard data', e);
         }
@@ -87,6 +102,8 @@ export default function DashboardScreen() {
     );
   }
 
+  const isAdmin = session?.user.role === 'admin' || session?.user.role === 'super_admin';
+
   if (!session) {
     return null;
   }
@@ -102,7 +119,51 @@ export default function DashboardScreen() {
 
       <AssistantWidget session={session} roleLabel={resolveRoleLabel(session.user.role)} />
 
+      {isAdmin && (
+        <View style={[styles.card, styles.adminCard]}>
+          <View style={styles.cardHeader}>
+            <View>
+              <Text style={styles.cardTitle}>Feedback de chatbot</Text>
+              <Text style={styles.cardText}>Incidencias no útiles agrupadas y listas para revisión.</Text>
+            </View>
+            <Pressable
+              onPress={async () => {
+                if (Platform.OS !== 'web') {
+                  Alert.alert('Exportación', 'La exportación CSV está disponible en la versión web del dashboard.');
+                  return;
+                }
 
+                const csv = await assistantFeedbackApi.exportCsv();
+                const url = URL.createObjectURL(csv);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'assistant-feedback.csv';
+                link.click();
+                URL.revokeObjectURL(url);
+              }}
+              style={styles.editButton}
+            >
+              <Text style={styles.editButtonText}>Exportar CSV</Text>
+            </Pressable>
+          </View>
+
+          {isLoadingFeedback ? (
+            <ActivityIndicator color="#0a7ea4" />
+          ) : feedbackReport && feedbackReport.items.length > 0 ? (
+            <View style={styles.feedbackTable}>
+              {feedbackReport.items.map((item) => (
+                <View key={item.question} style={styles.feedbackItem}>
+                  <Text style={styles.feedbackQuestion}>{item.question}</Text>
+                  <Text style={styles.feedbackMeta}>Frecuencia: {item.count} · Última revisión: {new Date(item.lastSeen).toLocaleDateString('es-ES')}</Text>
+                  <Text style={styles.cardText}>{item.samples[0]?.answer ?? 'Sin respuesta registrada'}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.cardText}>No hay incidencias No útil registradas aún.</Text>
+          )}
+        </View>
+      )}
 
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -304,6 +365,10 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
+  adminCard: {
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+  },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
@@ -479,5 +544,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0369a1',
     fontWeight: '600',
+  },
+  feedbackTable: {
+    gap: 10,
+  },
+  feedbackItem: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    padding: 10,
+  },
+  feedbackQuestion: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  feedbackMeta: {
+    fontSize: 11,
+    color: '#475569',
+    marginTop: 2,
+    marginBottom: 4,
   },
 });

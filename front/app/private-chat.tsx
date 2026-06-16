@@ -22,6 +22,7 @@ export default function PrivateChat() {
   const [isOnline, setIsOnline] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   const { socket } = useNotifications();
@@ -88,8 +89,10 @@ export default function PrivateChat() {
 
   const handleSend = async () => {
     if (!inputText.trim() && !file) return;
+    if (isSending) return;
 
     try {
+      setIsSending(true);
       let fileToUpload: any = null;
       if (file) {
         if (Platform.OS === 'web' && file.file) {
@@ -106,8 +109,12 @@ export default function PrivateChat() {
       await chatApi.sendPrivateMessage(id, inputText.trim(), fileToUpload);
       setInputText('');
       setFile(null);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      const errorMsg = e?.response?.data?.message || 'Error al enviar el mensaje por moderación';
+      alert(errorMsg);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -156,7 +163,7 @@ export default function PrivateChat() {
   if (loading) return <ActivityIndicator style={{ flex: 1 }} color={Colors.light.tint} />;
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 80}>
       <Stack.Screen
         options={{
           headerLeft: () => (
@@ -208,18 +215,27 @@ export default function PrivateChat() {
       )}
 
       <View style={styles.inputContainer}>
-        <Pressable style={styles.attachBtn} onPress={pickDocument}>
-          <Ionicons name="attach" size={28} color={Colors.light.tint} />
+        <Pressable style={styles.attachBtn} onPress={pickDocument} disabled={isSending}>
+          <Ionicons name="attach" size={28} color={isSending ? '#9ca3af' : Colors.light.tint} />
         </Pressable>
         <TextInput
           style={styles.input}
-          placeholder="Escribe un mensaje..."
+          placeholder={isSending ? "Enviando..." : "Escribe un mensaje..."}
           value={inputText}
           onChangeText={handleTextChange}
           multiline
+          editable={!isSending}
         />
-        <Pressable style={styles.sendBtn} onPress={handleSend}>
-          <Ionicons name="send" size={24} color="#fff" />
+        <Pressable 
+          style={[styles.sendBtn, (!inputText.trim() && !file || isSending) && styles.sendBtnDisabled]} 
+          onPress={handleSend}
+          disabled={!inputText.trim() && !file || isSending}
+        >
+          {isSending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name="send" size={24} color="#fff" />
+          )}
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -241,6 +257,7 @@ const styles = StyleSheet.create({
   attachBtn: { padding: 5, marginRight: 5 },
   input: { flex: 1, backgroundColor: '#f3f4f6', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, maxHeight: 100 },
   sendBtn: { backgroundColor: Colors.light.tint, width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginLeft: 10 },
+  sendBtnDisabled: { opacity: 0.5, backgroundColor: '#9ca3af' },
   mentionsContainer: { backgroundColor: '#fff', borderTopWidth: 1, borderColor: '#e5e7eb', marginHorizontal: 10, borderRadius: 8, marginBottom: 5, elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3, shadowOffset: { width: 0, height: -2 } },
   mentionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   mentionText: { fontSize: 14, color: '#374151', fontWeight: '500' },

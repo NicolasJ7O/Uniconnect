@@ -24,6 +24,7 @@
     "morgan": "^1.10.0",
     "multer": "^2.1.1",
     "pg": "^8.20.0",
+    "qrcode": "^1.5.4",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "zod": "^3.24.2"
@@ -35,6 +36,7 @@
     "@types/morgan": "^1.9.9",
     "@types/multer": "^2.1.0",
     "@types/node": "^20.11.0",
+    "@types/qrcode": "^1.5.6",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.57.0",

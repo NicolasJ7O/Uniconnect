@@ -24,6 +24,31 @@ type AppTokenPayload = {
   role: string;
 };
 
+async function triggerWelcomeWebhook(user: { id: string; email: string; name: string | null }) {
+  const webhookUrl = process.env.N8N_WELCOME_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL;
+  if (!webhookUrl) {
+    logger.warn('n8n webhook not configured; skipping welcome email trigger', { userId: user.id });
+    return;
+  }
+  try {
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'usuario.verificado',
+        userId: user.id,
+        email: user.email,
+        name: user.name || 'Estudiante',
+      }),
+    });
+    if (!response.ok) {
+      logger.warn(`n8n webhook returned ${response.status} for welcome email`, { userId: user.id });
+    }
+  } catch (error) {
+    logger.error('Failed to trigger welcome webhook via n8n', { userId: user.id, error });
+  }
+}
+
 function createAccessToken(payload: AppTokenPayload): string {
   const expiresIn = env.ACCESS_TOKEN_TTL as jwt.SignOptions['expiresIn'];
   return jwt.sign(payload, env.JWT_ACCESS_SECRET, { expiresIn });
@@ -139,6 +164,7 @@ export async function signInWithGoogle(idToken: string, device: DeviceContext) {
           },
         },
       });
+      triggerWelcomeWebhook(user).catch(e => logger.error('Error triggering welcome webhook', e));
     }
   }
 
@@ -224,6 +250,7 @@ export async function signInWithGoogleAccessToken(accessToken: string, device: D
           identities: { create: { provider: 'google', providerUserId: sub, emailAtProvider: email, hostedDomain: null } },
         },
       });
+      triggerWelcomeWebhook(user).catch(e => logger.error('Error triggering welcome webhook', e));
     }
   }
 
@@ -295,6 +322,7 @@ export async function signInWithAuth0(accessToken: string, device: DeviceContext
           identities: { create: { provider: 'auth0', providerUserId: sub, emailAtProvider: email, hostedDomain: null } },
         },
       });
+      triggerWelcomeWebhook(user).catch(e => logger.error('Error triggering welcome webhook', e));
     }
   }
 
@@ -393,6 +421,7 @@ export async function signInSimple(email: string, name: string, device: DeviceCo
         name: name || null,
       },
     });
+    triggerWelcomeWebhook(user).catch(e => logger.error('Error triggering welcome webhook', e));
   }
 
   const refreshData = buildRefreshToken();

@@ -11,8 +11,8 @@ export const moderationConfig = {
 
   // Banned / prohibited words
   palabrasProhibidas: [
-    'ofensiva1',
-    'groseria2',
+    'hpta',
+    'perra',
     'spamword',
     'prohibida'
   ]

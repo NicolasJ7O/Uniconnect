@@ -756,13 +756,15 @@ model ModerationAuditLog {
 }
 
 model UserBlock {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  blockedUntil DateTime
-  createdAt    DateTime @default(now())
-  reason       String?
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  blockedUntil  DateTime
+  createdAt     DateTime  @default(now())
+  reason        String?
+  blockCount    Int       @default(0)
+  lastBlockedAt DateTime?
 
-  user         User     @relation("UserBlocks", fields: [userId], references: [id], onDelete: Cascade)
+  user          User      @relation("UserBlocks", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("user_blocks")

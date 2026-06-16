@@ -26,6 +26,7 @@ export interface ModerationResult {
   message?: string;
   handler?: string;
   savedMessage?: any;
+  blockedUntil?: Date;
 }
 
 export abstract class ModerationHandler {

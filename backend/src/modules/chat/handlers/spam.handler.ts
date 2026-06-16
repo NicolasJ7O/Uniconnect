@@ -21,6 +21,7 @@ export class SpamHandler extends ModerationHandler {
           metadata: {
             blockedUntil: activeBlock.blockedUntil,
             reason: activeBlock.reason,
+            blockCount: activeBlock.blockCount,
             ip
           }
         });
@@ -29,7 +30,8 @@ export class SpamHandler extends ModerationHandler {
           approved: false,
           moderationCode: 'MO_003',
           message: 'Usuario bloqueado temporalmente por spam',
-          handler: 'SpamHandler'
+          handler: 'SpamHandler',
+          blockedUntil: activeBlock.blockedUntil
         };
       } else {
         // Clean up expired block
@@ -50,11 +52,23 @@ export class SpamHandler extends ModerationHandler {
 
     if (count >= 5) {
       const blockedUntil = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes block
-      
+
+      // Increment blockCount each time a new block is issued
       await prisma.userBlock.upsert({
         where: { userId },
-        update: { blockedUntil, reason: 'Spam detection (exceeded limit)' },
-        create: { userId, blockedUntil, reason: 'Spam detection (exceeded limit)' }
+        update: {
+          blockedUntil,
+          reason: 'Spam detection (exceeded limit)',
+          blockCount: { increment: 1 },
+          lastBlockedAt: new Date()
+        },
+        create: {
+          userId,
+          blockedUntil,
+          reason: 'Spam detection (exceeded limit)',
+          blockCount: 1,
+          lastBlockedAt: new Date()
+        }
       });
 
       await logModerationRejection({
@@ -74,7 +88,8 @@ export class SpamHandler extends ModerationHandler {
         approved: false,
         moderationCode: 'MO_003',
         message: 'Usuario bloqueado temporalmente por spam (5 minutos)',
-        handler: 'SpamHandler'
+        handler: 'SpamHandler',
+        blockedUntil
       };
     }
 

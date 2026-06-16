@@ -5,6 +5,42 @@ import { decorateMessage } from './decorators/message.decorator.js';
 import { chatSubject } from './observers/index.js';
 import { createPollForMessageInTransaction, getPollById, serializePollRecord, voteOnPoll } from './polls/poll.service.js';
 import { runModerationPipeline } from './handlers/moderation-pipeline.js';
+import { checkAndEscalate } from './moderation-escalation.service.js';
+
+// ─── Moderation rejection payloads ──────────────────────────────────────────
+type Severity = 'low' | 'medium' | 'high';
+
+interface ModerationRejectedPayload {
+  moderationCode: string;
+  message: string;
+  severity: Severity;
+  suggestion: string;
+  whyUrl: string;
+  blockedUntil?: string; // ISO string
+}
+
+const MODERATION_META: Record<string, { severity: Severity; suggestion: string; whyUrl: string }> = {
+  MO_001: { severity: 'low',    suggestion: 'Acorta tu mensaje a menos de 1000 caracteres e inténtalo de nuevo.', whyUrl: '/normas#longitud' },
+  MO_002: { severity: 'medium', suggestion: 'Revisa el lenguaje de tu mensaje y elimina palabras inapropiadas.',   whyUrl: '/normas#palabras' },
+  MO_003: { severity: 'high',   suggestion: 'Estás enviando mensajes muy seguido. Espera a que se libere el bloqueo.', whyUrl: '/normas#spam' },
+  MO_004: { severity: 'medium', suggestion: 'Evita incluir enlaces externos en los mensajes.',                      whyUrl: '/normas#enlaces' },
+};
+
+function buildRejectedPayload(
+  code: string,
+  message: string,
+  blockedUntil?: Date
+): ModerationRejectedPayload {
+  const meta = MODERATION_META[code] ?? { severity: 'medium', suggestion: 'Revisa tu mensaje antes de enviarlo.', whyUrl: '/normas' };
+  return {
+    moderationCode: code,
+    message,
+    severity: meta.severity,
+    suggestion: meta.suggestion,
+    whyUrl: meta.whyUrl,
+    ...(blockedUntil ? { blockedUntil: blockedUntil.toISOString() } : {})
+  };
+}
 
 export class ChatService {
   async getGroupMessages(groupId: string, userId: string, page: number = 1, limit: number = 20) {
@@ -98,7 +134,16 @@ export class ChatService {
     });
 
     if (!result.approved) {
-      throw new ModerationError(result.moderationCode || 'MO_REJECTED', result.message || 'Mensaje rechazado');
+      const code = result.moderationCode || 'MO_REJECTED';
+      const payload = buildRejectedPayload(code, result.message || 'Mensaje rechazado', result.blockedUntil);
+      emitToUser(senderId, 'moderation-rejected', payload);
+
+      // Escalate to super_admin if spam block threshold is reached (fire & forget)
+      if (code === 'MO_003') {
+        checkAndEscalate(senderId).catch(() => {});
+      }
+
+      throw new ModerationError(code, result.message || 'Mensaje rechazado');
     }
 
     return result.savedMessage;
@@ -182,7 +227,16 @@ export class ChatService {
     });
 
     if (!result.approved) {
-      throw new ModerationError(result.moderationCode || 'MO_REJECTED', result.message || 'Mensaje rechazado');
+      const code = result.moderationCode || 'MO_REJECTED';
+      const payload = buildRejectedPayload(code, result.message || 'Mensaje rechazado', result.blockedUntil);
+      emitToUser(senderId, 'moderation-rejected', payload);
+
+      // Escalate to super_admin if spam block threshold is reached (fire & forget)
+      if (code === 'MO_003') {
+        checkAndEscalate(senderId).catch(() => {});
+      }
+
+      throw new ModerationError(code, result.message || 'Mensaje rechazado');
     }
 
     return result.savedMessage;

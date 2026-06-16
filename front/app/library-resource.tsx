@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   Linking,
+  TextInput,
   Modal,
   Pressable,
   ScrollView,

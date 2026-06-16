@@ -105,4 +105,12 @@ export const eventApi = {
     const res = await apiClient.post('/events/verify-qr', { token });
     return res.data;
   },
+  acceptInvitation: async (token: string): Promise<any> => {
+    const res = await apiClient.post(`/events/invitations/accept/${token}`);
+    return res.data;
+  },
+  rejectInvitation: async (token: string): Promise<any> => {
+    const res = await apiClient.post(`/events/invitations/reject/${token}`);
+    return res.data;
+  },
 };

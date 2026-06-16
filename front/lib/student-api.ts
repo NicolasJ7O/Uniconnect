@@ -43,6 +43,11 @@ export async function getStudentProfileById(userId: string): Promise<any> {
     return response.data;
 }
 
+export async function searchStudents(name: string): Promise<any[]> {
+    const res = await apiClient.get<any[]>('/student/search', { params: { name } });
+    return res.data;
+}
+
 export async function getEnrichedStudentProfile(userId: string): Promise<any> {
     const response = await apiClient.get<any>(`/perfil/${userId}?vista=completa`);
     return response.data;

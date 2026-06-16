@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authConfig } from '@/constants/AuthConfig';
@@ -118,9 +118,43 @@ export const withPoll = (
 ) => {
   return function PollDecorator(props: BaseMessageProps) {
     const isClosed = poll.status === 'CLOSED';
+    const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+
+    useEffect(() => {
+      let timer: NodeJS.Timeout | null = null;
+
+      const compute = () => {
+        if (!poll.closingAt || poll.status === 'CLOSED') {
+          setRemainingSeconds(null);
+          return;
+        }
+        const diff = Math.max(0, Math.floor((Date.parse(poll.closingAt) - Date.now()) / 1000));
+        setRemainingSeconds(diff);
+        if (diff <= 0 && timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      };
+
+      compute();
+      if (poll.closingAt && poll.status !== 'CLOSED') {
+        timer = setInterval(compute, 1000);
+      }
+
+      return () => {
+        if (timer) clearInterval(timer);
+      };
+    }, [poll.closingAt, poll.status]);
+
     const closingAtLabel = poll.closingAt
       ? new Date(poll.closingAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
       : null;
+
+    const formatSeconds = (s: number) => {
+      const mm = Math.floor(s / 60).toString().padStart(2, '0');
+      const ss = (s % 60).toString().padStart(2, '0');
+      return `${mm}:${ss}`;
+    };
 
     return (
       <View style={styles.decoratedContainer}>
@@ -133,7 +167,11 @@ export const withPoll = (
             </Text>
           </View>
 
-          {closingAtLabel && <Text style={styles.pollMeta}>Cierra: {closingAtLabel}</Text>}
+          {poll.status !== 'CLOSED' && remainingSeconds !== null && (
+            <Text style={styles.pollMeta}>Cierra en: {formatSeconds(remainingSeconds)}</Text>
+          )}
+          {poll.status === 'CLOSED' && closingAtLabel && <Text style={styles.pollMeta}>Cierra: {closingAtLabel}</Text>}
+
           <Text style={styles.pollMeta}>
             {poll.totalVotes} votos · {poll.participantCount} participantes
           </Text>

@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast';
 import { getPendingOwnershipTransfers, respondToOwnershipTransfer } from '@/lib/study-group-api';
 import { Alert } from 'react-native';
 import { notificationApi } from '@/lib/notification-api';
+import { eventApi } from '@/lib/event-api';
 
 interface NotificationContextType {
     pendingTransfers: any[];
@@ -148,6 +149,46 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 refreshUnreadCount();
                 refreshTransfers();
                 
+                // If this is an event invitation, show an accept/reject prompt
+                if (data && data.type === 'EVENT_INVITATION') {
+                    showToast(data.message, 'info');
+                    Alert.alert('Invitación', data.message || 'Te han invitado a un evento', [
+                        {
+                            text: 'Rechazar',
+                            style: 'destructive',
+                            onPress: async () => {
+                                try {
+                                    const token = data.token || data.invitationToken;
+                                    if (!token) throw new Error('Token no disponible');
+                                    await eventApi.rejectInvitation(token);
+                                    showToast('Invitación rechazada', 'success');
+                                    refreshUnreadCount();
+                                } catch (err) {
+                                    console.error('Error rejecting invitation', err);
+                                    showToast('No se pudo rechazar la invitación', 'error');
+                                }
+                            }
+                        },
+                        {
+                            text: 'Aceptar',
+                            onPress: async () => {
+                                try {
+                                    const token = data.token || data.invitationToken;
+                                    if (!token) throw new Error('Token no disponible');
+                                    await eventApi.acceptInvitation(token);
+                                    showToast('Invitación aceptada', 'success');
+                                    refreshUnreadCount();
+                                    router.push({ pathname: '/events' });
+                                } catch (err) {
+                                    console.error('Error accepting invitation', err);
+                                    showToast('No se pudo aceptar la invitación', 'error');
+                                }
+                            }
+                        }
+                    ]);
+                    return;
+                }
+
                 // When a new chat or system notification arrives, show a toast
                 showToast(data.message, 'info', () => {
                     if (data.eventId) {

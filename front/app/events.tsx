@@ -10,11 +10,11 @@ import {
   TextInput,
   RefreshControl,
   Platform,
-  Image,
+  
 } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { eventApi, type UniversityEvent } from '@/lib/event-api';
-import { getStudentProfile } from '@/lib/student-api';
+import { getStudentProfile, searchStudents } from '@/lib/student-api';
 import { useNotifications } from '@/context/NotificationContext';
 
 const CATEGORIES = ['ACADEMICO', 'CULTURAL', 'DEPORTIVO', 'TECNOLOGIA', 'OTRO'] as const;
@@ -49,6 +49,12 @@ export default function EventsScreen() {
   const [selectedEventForInvite, setSelectedEventForInvite] = useState<null | UniversityEvent>(null);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [qrImage, setQrImage] = useState<string | null>(null);
+  const [inviteSearchResults, setInviteSearchResults] = useState<any[]>([]);
+  const [inviteSearchLoading, setInviteSearchLoading] = useState(false);
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
+  const [filterTitle, setFilterTitle] = useState('');
+  const [filterFromDate, setFilterFromDate] = useState('');
+  const [filterToDate, setFilterToDate] = useState('');
 
   const { showToast } = useToast();
   const { socket } = useNotifications();
@@ -131,7 +137,7 @@ export default function EventsScreen() {
       void loadData(true);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchText]);
+  }, [searchText, loadData]);
 
   const onRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -340,26 +346,9 @@ export default function EventsScreen() {
       </View>
 
       <View style={styles.filterPanel}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Buscar por título o descripción"
-          value={searchText}
-          onChangeText={setSearchText}
-        />
-        <View style={styles.filterRow}>
-          <TextInput
-            style={[styles.dateInput, { flex: 1, marginRight: 8 }]}
-            placeholder="Desde (YYYY-MM-DD)"
-            value={fromDate}
-            onChangeText={setFromDate}
-          />
-          <TextInput
-            style={[styles.dateInput, { flex: 1 }]}
-            placeholder="Hasta (YYYY-MM-DD)"
-            value={toDate}
-            onChangeText={setToDate}
-          />
-        </View>
+        <Pressable style={styles.filterButton} onPress={() => setFilterModalOpen(true)}>
+          <Text style={styles.filterButtonText}>Filtrar (título / fechas)</Text>
+        </Pressable>
         <View style={styles.filterRow}>
           {(['all', 'available', 'full'] as const).map(option => (
             <Pressable
@@ -374,6 +363,35 @@ export default function EventsScreen() {
           ))}
         </View>
       </View>
+
+      <Modal visible={filterModalOpen} animationType="slide" transparent onRequestClose={() => setFilterModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Filtrar eventos</Text>
+            <Text style={styles.inputLabel}>Título</Text>
+            <TextInput style={styles.input} placeholder="Título o palabra clave" value={filterTitle} onChangeText={setFilterTitle} />
+            <Text style={styles.inputLabel}>Desde (YYYY-MM-DD)</Text>
+            <TextInput style={styles.input} placeholder="AAAA-MM-DD" value={filterFromDate} onChangeText={setFilterFromDate} />
+            <Text style={styles.inputLabel}>Hasta (YYYY-MM-DD)</Text>
+            <TextInput style={styles.input} placeholder="AAAA-MM-DD" value={filterToDate} onChangeText={setFilterToDate} />
+            <View style={styles.modalActions}>
+              <Pressable style={[styles.btn, styles.cancelBtn]} onPress={() => setFilterModalOpen(false)}>
+                <Text style={styles.cancelBtnText}>Cerrar</Text>
+              </Pressable>
+              <Pressable style={[styles.btn, styles.submitBtn]} onPress={() => {
+                setSearchText(filterTitle);
+                setFromDate(filterFromDate);
+                setToDate(filterToDate);
+                setFilterModalOpen(false);
+                setPage(1);
+                void loadData(true);
+              }}>
+                <Text style={styles.submitBtnText}>Aplicar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Events List */}
       <ScrollView
@@ -423,17 +441,7 @@ export default function EventsScreen() {
                 </View>
 
                 <Text style={styles.eventTitle}>{item.title}</Text>
-                  {item.ogImage && (
-                    <View style={styles.ogImageWrap}>
-                      {Platform.OS === 'web' ? (
-                        // web can use img for data URLs
-                        <img src={item.ogImage} alt="og" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 8 }} />
-                      ) : (
-                        // native Image
-                        <Image source={{ uri: item.ogImage }} style={styles.ogImage} />
-                      )}
-                    </View>
-                  )}
+                  {/* OG images removed from UniversityEvent type; no preview rendered */}
                 <Text style={styles.eventDescription}>{item.description}</Text>
 
                 <View style={styles.eventMetaRow}>
@@ -639,8 +647,45 @@ export default function EventsScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Invitar a evento</Text>
             <Text style={{ marginTop: 6 }}>{selectedEventForInvite?.title}</Text>
+            <Text style={{ marginTop: 10, fontSize: 13, color: '#334155' }}>Buscar usuario por nombre</Text>
             <TextInput
-              style={[styles.input, { marginTop: 12 }]}
+              style={[styles.input, { marginTop: 8 }]}
+              placeholder="Buscar por nombre..."
+              value={inviteEmail}
+              onChangeText={async (text) => {
+                setInviteEmail(text);
+                if (!text || text.trim().length < 3) {
+                  setInviteSearchResults([]);
+                  return;
+                }
+                setInviteSearchLoading(true);
+                try {
+                  const res = await searchStudents(text.trim());
+                  setInviteSearchResults(res || []);
+                } catch (e) {
+                  console.error('Error searching students', e);
+                  setInviteSearchResults([]);
+                } finally {
+                  setInviteSearchLoading(false);
+                }
+              }}
+              autoCapitalize="words"
+            />
+
+            {inviteSearchLoading && <Text style={{ marginTop: 8 }}>Buscando...</Text>}
+            {inviteSearchResults.length > 0 && (
+              <ScrollView style={{ maxHeight: 160, marginTop: 8 }}>
+                {inviteSearchResults.map((s) => (
+                  <Pressable key={s.id} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#eef2f7' }} onPress={() => { setInviteEmail(s.email); setInviteSearchResults([]); }}>
+                    <Text style={{ fontWeight: '700' }}>{s.name || s.email}</Text>
+                    <Text style={{ color: '#64748b', fontSize: 12 }}>{s.email}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+            <Text style={{ marginTop: 10, fontSize: 13, color: '#334155' }}>O envía a correo</Text>
+            <TextInput
+              style={[styles.input, { marginTop: 8 }]}
               placeholder="Correo del invitado"
               value={inviteEmail}
               onChangeText={setInviteEmail}
@@ -660,6 +705,7 @@ export default function EventsScreen() {
                     showToast('Invitación enviada', 'success');
                     setInviteModalOpen(false);
                     setInviteEmail('');
+                    setInviteSearchResults([]);
                   } catch (e) {
                     console.error('Error sending invitation', e);
                     showToast('No se pudo enviar la invitación', 'error');
@@ -784,20 +830,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 
-  ogImageWrap: {
-    marginTop: 8,
-    marginBottom: 12,
-    width: '100%',
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#f8fafc',
-  },
-  ogImage: {
-    width: '100%',
-    height: 180,
-    resizeMode: 'cover',
-    borderRadius: 8,
-  },
+  
   filterPanel: {
     backgroundColor: '#ffffff',
     borderRadius: 14,
@@ -807,6 +840,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
+  filterButton: {
+    backgroundColor: '#eef2f7',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  filterButtonText: { color: '#0f172a', fontWeight: '700' },
   searchInput: {
     borderWidth: 1,
     borderColor: '#e2e8f0',

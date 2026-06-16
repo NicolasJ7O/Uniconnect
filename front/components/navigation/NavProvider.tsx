@@ -65,17 +65,11 @@ export const NavProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     { key: 'dashboard', label: 'Dashboard', icon: 'house.fill', route: '/dashboard' },
     { key: 'chatbot', label: 'Chatbot UniConnect', icon: 'sparkles', route: '/assistant' },
     { key: 'study-groups', label: 'Grupos de estudio', icon: 'person.3.fill', route: '/study-groups' },
-    { key: 'group-chats', label: 'Chats grupales', icon: 'bubble.left.and.bubble.right.fill', route: '/study-group-chat' },
     { key: 'private-messages', label: 'Mensajes privados', icon: 'envelope.fill', route: '/private-chat' },
     { key: 'events', label: 'Eventos universitarios', icon: 'calendar', route: '/events' },
     { key: 'study-sessions', label: 'Sesiones de estudio', icon: 'clock.fill', route: '/study-sessions' },
-    { key: 'polls', label: 'Encuestas', icon: 'chart.bar.fill', route: '/study-groups' },
     { key: 'library', label: 'Biblioteca', icon: 'book.fill', route: '/subject-library' },
     { key: 'profiles', label: 'Explorador de perfiles', icon: 'person.crop.circle', route: '/student-search' },
-    { key: 'notifications', label: 'Notificaciones', icon: 'bell.fill', action: () => (setModalVisible ? setModalVisible(true) : null) },
-    { key: 'my-events', label: 'Mis eventos', icon: 'bookmark.fill', route: '/events' },
-    { key: 'my-groups', label: 'Mis grupos', icon: 'person.crop.circle.badge.checkmark', route: '/study-groups' },
-    { key: 'settings', label: 'Configuración', icon: 'gear', route: '/profile-edit' },
     { key: 'profile', label: 'Perfil del estudiante', icon: 'person.fill', route: '/profile-edit' },
   ];
 

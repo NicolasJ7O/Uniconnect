@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Image, View, Pressable, Text, StyleSheet } from 'react-native';
+import { Image, View, Pressable, Text, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -64,6 +64,9 @@ const styles = StyleSheet.create({
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && width >= 900;
+
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
@@ -79,24 +82,28 @@ export default function RootLayout() {
         <NotificationProvider>
           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
             <NavProvider>
-              <GlobalNav />
-              <Stack
-                screenOptions={{
-                  headerStyle: { backgroundColor: '#003e70' },
-                  headerTintColor: '#fff',
-                  headerTitleStyle: { fontWeight: 'bold' },
-                  headerLeft: () => <HeaderLeft />,
-                  headerRight: () => <HeaderRight />,
-                }}
-              >
-              <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="signup" options={{ title: 'Sign Up' }} />
-              <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="profile-edit" options={{ title: 'Editar Perfil' }} />
-              <Stack.Screen name="events" options={{ title: 'Eventos Universitarios' }} />
-              <Stack.Screen name="study-sessions" options={{ title: 'Sesiones de Estudio' }} />
-              </Stack>
+              <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column' }}>
+                <GlobalNav />
+                <View style={{ flex: 1, overflow: 'hidden' }}>
+                  <Stack
+                    screenOptions={{
+                      headerStyle: { backgroundColor: '#003e70' },
+                      headerTintColor: '#fff',
+                      headerTitleStyle: { fontWeight: 'bold' },
+                      headerLeft: () => <HeaderLeft />,
+                      headerRight: () => <HeaderRight />,
+                    }}
+                  >
+                  <Stack.Screen name="index" options={{ headerShown: false }} />
+                  <Stack.Screen name="signup" options={{ title: 'Sign Up' }} />
+                  <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="profile-edit" options={{ title: 'Editar Perfil' }} />
+                  <Stack.Screen name="events" options={{ title: 'Eventos Universitarios' }} />
+                  <Stack.Screen name="study-sessions" options={{ title: 'Sesiones de Estudio' }} />
+                  </Stack>
+                </View>
+              </View>
             </NavProvider>
             <StatusBar style="auto" />
             <NotificationModal />

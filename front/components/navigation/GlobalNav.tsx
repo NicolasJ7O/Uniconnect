@@ -47,7 +47,7 @@ export default function GlobalNav() {
 }
 
 const styles = StyleSheet.create({
-  sidebarWrapper: { position: 'absolute', left: 0, top: 0, bottom: 0, zIndex: 40 },
+  sidebarWrapper: { zIndex: 40, borderRightWidth: 1, borderRightColor: '#e6eef6' },
   bottomNav: { position: 'absolute', left: 0, right: 0, bottom: 12, height: 64, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', zIndex: 50 },
   navBtn: { backgroundColor: '#003e70', padding: 10, borderRadius: 12, alignItems: 'center', width: 100 },
   btnLabel: { color: '#fff', fontWeight: '700', marginTop: 4 },

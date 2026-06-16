@@ -31,7 +31,7 @@ import { getStudentProfile } from '@/lib/student-api';
 export const NavProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [privateChats, setPrivateChats] = useState<Conversation[]>([]);
-  const [subjects, setSubjects] = useState<string[]>([]);
+  const [subjects, setSubjects] = useState<{id: string, name: string}[]>([]);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       if (Platform.OS === 'web') return localStorage.getItem('nav.collapsed') === 'true';
@@ -53,7 +53,7 @@ export const NavProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             getStudentProfile()
           ]);
           setPrivateChats(chats);
-          setSubjects(profile.subjects.map(s => s.name));
+          setSubjects(profile.subjects.map(s => ({ id: s.id, name: s.name })));
         } catch (e) {
           console.error('Error fetching submenu data', e);
         }
@@ -104,10 +104,10 @@ export const NavProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       icon: 'book.fill', 
       route: '/subject-library',
       children: subjects.map(sub => ({
-        key: `lib-${sub}`,
-        label: sub,
+        key: `lib-${sub.id}`,
+        label: sub.name,
         icon: 'book.fill',
-        route: `/subject-library?subject=${encodeURIComponent(sub)}`
+        route: `/subject-library?subjectId=${sub.id}&subjectName=${encodeURIComponent(sub.name)}`
       }))
     },
     { 
@@ -116,10 +116,10 @@ export const NavProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       icon: 'bubble.left.and.bubble.right.fill', 
       route: '/subject-forum',
       children: subjects.map(sub => ({
-        key: `forum-${sub}`,
-        label: sub,
+        key: `forum-${sub.id}`,
+        label: sub.name,
         icon: 'bubble.left.and.bubble.right.fill',
-        route: `/subject-forum?subject=${encodeURIComponent(sub)}`
+        route: `/subject-forum?subjectId=${sub.id}&subjectName=${encodeURIComponent(sub.name)}`
       }))
     },
     { key: 'profiles', label: 'Explorador de perfiles', icon: 'person.crop.circle', route: '/student-search' },

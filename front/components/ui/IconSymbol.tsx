@@ -29,6 +29,7 @@ const MAPPING = {
   'person.crop.circle': 'account-circle',
   'person.fill': 'person',
   'chevron.down': 'expand-more',
+  'bubble.left.and.bubble.right.fill': 'forum',
 } as any;
 
 /**

@@ -171,6 +171,7 @@ const styles = StyleSheet.create({
   avatarPlaceholder: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#0a7ea4', alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
   sub: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  role: { fontSize: 12, color: '#0a7ea4', fontWeight: '700', marginTop: 4 },
   section: { marginTop: 16 },
   sectionTitle: { fontSize: 13, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

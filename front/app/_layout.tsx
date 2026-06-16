@@ -11,6 +11,9 @@ import { ToastProvider } from '@/components/Toast';
 import { NotificationProvider, useNotifications } from '@/context/NotificationContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import NotificationModal from '@/components/NotificationModal';
+import { NavProvider } from '@/components/navigation/NavProvider';
+import HeaderLeft from '@/components/navigation/HeaderLeft';
+import GlobalNav from '@/components/navigation/GlobalNav';
 
 function HeaderRight() {
   const { unreadCount, setModalVisible } = useNotifications();
@@ -75,14 +78,17 @@ export default function RootLayout() {
       <ToastProvider>
         <NotificationProvider>
           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <Stack
-              screenOptions={{
-                headerStyle: { backgroundColor: '#003e70' },
-                headerTintColor: '#fff',
-                headerTitleStyle: { fontWeight: 'bold' },
-                headerRight: () => <HeaderRight />,
-              }}
-            >
+            <NavProvider>
+              <GlobalNav />
+              <Stack
+                screenOptions={{
+                  headerStyle: { backgroundColor: '#003e70' },
+                  headerTintColor: '#fff',
+                  headerTitleStyle: { fontWeight: 'bold' },
+                  headerLeft: () => <HeaderLeft />,
+                  headerRight: () => <HeaderRight />,
+                }}
+              >
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="signup" options={{ title: 'Sign Up' }} />
               <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
@@ -90,7 +96,8 @@ export default function RootLayout() {
               <Stack.Screen name="profile-edit" options={{ title: 'Editar Perfil' }} />
               <Stack.Screen name="events" options={{ title: 'Eventos Universitarios' }} />
               <Stack.Screen name="study-sessions" options={{ title: 'Sesiones de Estudio' }} />
-            </Stack>
+              </Stack>
+            </NavProvider>
             <StatusBar style="auto" />
             <NotificationModal />
           </ThemeProvider>

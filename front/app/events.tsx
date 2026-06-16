@@ -661,7 +661,8 @@ export default function EventsScreen() {
                 setInviteSearchLoading(true);
                 try {
                   const res = await searchStudents(text.trim());
-                  setInviteSearchResults(res || []);
+                  // `searchStudents` now returns { results, total }
+                  setInviteSearchResults((res && (res as any).results) || []);
                 } catch (e) {
                   console.error('Error searching students', e);
                   setInviteSearchResults([]);

@@ -275,7 +275,7 @@ export default function DashboardScreen() {
           <Text style={styles.cardTitle}>Eventos Universitarios</Text>
         </View>
         <Text style={styles.cardText}>Explora eventos, fíltralos por categoría y suscríbete a notificaciones.</Text>
-        <Pressable style={[styles.actionButton, { backgroundColor: '#0284c7', borderColor: '#bae6fd' }]} onPress={() => router.push('/events')}>
+        <Pressable style={styles.actionButton} onPress={() => router.push('/events')}>
           <Text style={styles.actionButtonLabel}>Explorar Eventos</Text>
         </Pressable>
       </View>
@@ -285,7 +285,7 @@ export default function DashboardScreen() {
           <Text style={styles.cardTitle}>Sesiones de Estudio</Text>
         </View>
         <Text style={styles.cardText}>Programa bloques recurrentes y sincronízalos entre web y móvil.</Text>
-        <Pressable style={[styles.actionButton, { backgroundColor: '#0a7ea4', borderColor: '#c4f1f9' }]} onPress={() => router.push('/study-sessions' as any)}>
+        <Pressable style={styles.actionButton} onPress={() => router.push('/study-sessions' as any)}>
           <Text style={styles.actionButtonLabel}>Gestionar Sesiones</Text>
         </Pressable>
       </View>
@@ -295,7 +295,7 @@ export default function DashboardScreen() {
           <Text style={styles.cardTitle}>Buscar Estudiantes</Text>
         </View>
         <Text style={styles.cardText}>Encuentra estudiantes por nombre o correo y visualiza su perfil completo.</Text>
-        <Pressable style={[styles.actionButton, { backgroundColor: '#6b21a8', borderColor: '#e9d5ff' }]} onPress={() => router.push('/student-search')}>
+        <Pressable style={styles.actionButton} onPress={() => router.push('/student-search' as any)}>
           <Text style={styles.actionButtonLabel}>Buscar Estudiantes</Text>
         </Pressable>
       </View>

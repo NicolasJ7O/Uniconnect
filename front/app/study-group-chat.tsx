@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, Stack, router } from 'expo-router';
-import { chatApi, type ChatMessage } from '@/lib/chat-api';
+import { chatApi, type ChatMessage, type ChatPoll } from '@/lib/chat-api';
 import { getStudyGroupById, type StudyGroup, type StudyGroupMember } from '@/lib/study-group-api';
 import { loadSession, type SessionData } from '@/lib/session';
 import { useNotifications } from '@/context/NotificationContext';
@@ -9,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import * as DocumentPicker from 'expo-document-picker';
 import { decorateMessage } from '@/lib/message-decorator';
-import type { ChatPoll } from '@/lib/chat-api';
 import ModerationBanner, { type ModerationRejectedPayload } from '@/components/ModerationBanner';
 import ModerationWhyModal from '@/components/ModerationWhyModal';
 
@@ -295,9 +294,11 @@ export default function StudyGroupChat() {
     const firstName = session?.user.name?.split(' ')[0];
     const isMentioned = !!firstName && item.content.includes(`@${firstName}`);
 
+    const senderName = (item as any).sender?.name || item.senderId || 'Usuario';
+
     return (
       <View style={[styles.messageWrapper, isMe ? styles.messageWrapperMe : styles.messageWrapperOther]}>
-        {!isMe && <Text style={styles.senderName}>{item.sender.name || 'Usuario'}</Text>}
+        {!isMe && <Text style={styles.senderName}>{senderName}</Text>}
         <View style={[styles.messageBubble, isMe ? styles.messageBubbleMe : styles.messageBubbleOther]}>
           {/* Here we apply the Decorator pattern dynamically */}
           {decorateMessage(

@@ -121,7 +121,7 @@ export const withPoll = (
     const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
 
     useEffect(() => {
-      let timer: NodeJS.Timeout | null = null;
+      let timer: ReturnType<typeof setInterval> | null = null;
 
       const compute = () => {
         if (!poll.closingAt || poll.status === 'CLOSED') {

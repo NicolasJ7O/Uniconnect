@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, Pressable } from 'react-native';
 import { searchStudents } from '@/lib/student-api';
 import StudentProfileModal from '@/components/StudentProfileModal';
@@ -8,25 +8,35 @@ export default function StudentSearchScreen() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState<number | undefined>(undefined);
   const [selected, setSelected] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const debounceRef = useRef<number | null>(null);
 
-  const doSearch = async (text: string) => {
+  const doSearch = (text: string, nextPage = 1) => {
     setQuery(text);
-    if (!text || text.trim().length < 2) {
-      setResults([]);
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await searchStudents(text.trim());
-      setResults(res || []);
-    } catch (e) {
-      console.error('Error searching students', e);
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
+    if (debounceRef.current) window.clearTimeout(debounceRef.current as any);
+    debounceRef.current = window.setTimeout(async () => {
+      if (!text || text.trim().length < 2) {
+        setResults([]);
+        setTotal(undefined);
+        return;
+      }
+      setLoading(true);
+      try {
+        const { results: res, total: t } = await searchStudents(text.trim(), nextPage, 20);
+        if (nextPage > 1) setResults((prev) => [...prev, ...res]);
+        else setResults(res || []);
+        setTotal(t);
+        setPage(nextPage);
+      } catch (e) {
+        console.error('Error searching students', e);
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 350) as unknown as number;
   };
 
   const openProfile = (id: string) => {
@@ -41,7 +51,7 @@ export default function StudentSearchScreen() {
         style={styles.input}
         placeholder="Nombre o correo"
         value={query}
-        onChangeText={doSearch}
+        onChangeText={(t) => doSearch(t, 1)}
       />
 
       <FlatList
@@ -58,6 +68,13 @@ export default function StudentSearchScreen() {
           </Pressable>
         )}
         ListEmptyComponent={<Text style={styles.empty}>{loading ? 'Buscando...' : 'Empieza a escribir para buscar'}</Text>}
+        ListFooterComponent={() => (
+          total && results.length < (total || 0) ? (
+            <Pressable style={{ padding: 12, alignItems: 'center' }} onPress={() => doSearch(query, page + 1)}>
+              <Text style={{ color: '#0a7ea4', fontWeight: '800' }}>{loading ? 'Cargando...' : 'Cargar más'}</Text>
+            </Pressable>
+          ) : null
+        )}
       />
 
       <StudentProfileModal visible={modalOpen} onClose={() => setModalOpen(false)} userId={selected} />

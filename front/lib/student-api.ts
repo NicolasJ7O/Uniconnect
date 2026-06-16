@@ -43,9 +43,12 @@ export async function getStudentProfileById(userId: string): Promise<any> {
     return response.data;
 }
 
-export async function searchStudents(name: string): Promise<any[]> {
-    const res = await apiClient.get<any[]>('/student/search', { params: { name } });
-    return res.data;
+export async function searchStudents(name: string, page = 1, pageSize = 20, filters: Record<string, any> = {}): Promise<{ results: any[]; total?: number }> {
+    const params = { name, page, pageSize, ...filters };
+    const res = await apiClient.get<any>('/student/search', { params });
+    // backend may return either array or { results, total }
+    if (Array.isArray(res.data)) return { results: res.data, total: res.data.length };
+    return { results: res.data.results || [], total: res.data.total };
 }
 
 export async function getEnrichedStudentProfile(userId: string): Promise<any> {

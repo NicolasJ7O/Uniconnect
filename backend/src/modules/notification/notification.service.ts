@@ -93,8 +93,11 @@ export async function createSystemNotification(input: {
   const decorated = decorateNotification(notification);
   // Emit the decorated notification but also flatten metadata onto the
   // payload so consumers can route easily (legacy observers used to emit
-  // `{...notif, ...metadata}`).
-  const payload = { ...decorated, ...(notification.metadata ?? {}) };
+  // `{...notif, ...metadata}`). Ensure metadata is an object before spreading
+  const metaSafe: Record<string, any> = (notification.metadata && typeof notification.metadata === 'object')
+    ? (notification.metadata as Record<string, any>)
+    : {};
+  const payload = { ...decorated, ...metaSafe };
   emitToUser(input.userId, 'new-notification', payload);
   return decorated;
 }

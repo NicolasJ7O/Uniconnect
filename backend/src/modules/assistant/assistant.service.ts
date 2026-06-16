@@ -202,15 +202,31 @@ function getFallbackPromptStrategy(role: AssistantRole) {
 
 function buildFallbackResponse(role: AssistantRole, chunks: AssistantKnowledgeChunk[]) {
   const references = buildSourceMetadata(chunks);
-  const topicSummary = chunks
+
+  if (chunks.length === 0) {
+    return {
+      content: 'Solo puedo responder sobre funcionalidades, políticas y módulos de UniConnect. Si tu consulta es sobre otra plataforma o un tema general ajeno al sistema, no la puedo resolver desde este asistente.',
+      answerType: 'REFUSAL',
+      references,
+    };
+  }
+
+  // Without an LLM to synthesize the answer, we provide the full documentation content
+  // of the most relevant chunk directly to the user.
+  const bestChunk = chunks[0];
+  const additionalTopics = chunks.slice(1)
     .map((chunk) => `- ${chunk.summary}`)
     .join('\n');
 
+  let responseContent = `Puedo ayudarte como ${roleLabel(role)} con UniConnect. Aquí tienes la información relevante:\n\n**${bestChunk.title}**\n\n${bestChunk.content}`;
+
+  if (chunks.length > 1) {
+    responseContent += `\n\n---\n\nTambién encontré información sobre:\n${additionalTopics}`;
+  }
+
   return {
-    content: chunks.length > 0
-      ? `Puedo ayudarte como ${roleLabel(role)} con UniConnect.\n\n${topicSummary}\n\nSi quieres, puedo profundizar en una sección concreta.`
-      : 'Solo puedo responder sobre funcionalidades, políticas y módulos de UniConnect. Si tu consulta es sobre otra plataforma o un tema general ajeno al sistema, no la puedo resolver desde este asistente.',
-    answerType: chunks.length > 0 ? (role === 'student' ? 'STANDARD' : 'ADMIN') : 'REFUSAL',
+    content: responseContent,
+    answerType: role === 'student' ? 'STANDARD' : 'ADMIN',
     references,
   };
 }

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../errors/app-error.js';
 import { Logger } from '../../lib/logger.js';
+import * as notificationService from '../notification/notification.service.js';
 
 const logger = Logger.getInstance();
 const INVITE_TTL_HOURS = 72;
@@ -10,48 +11,11 @@ function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
-async function triggerN8nInvite(payload: {
-  eventId: string;
-  eventTitle: string;
-  recipientEmail: string;
-  token: string;
-}) {
-  const webhookUrl = process.env.N8N_WEBHOOK_URL || process.env.N8N_US_N8N03_URL;
-
-  if (!webhookUrl) {
-    logger.warn('n8n webhook not configured; skipping invitation email dispatch', payload);
-    return;
-  }
-
-  const inviteUrl = `${process.env.APP_PUBLIC_URL || 'http://localhost:8081'}/events/invite/${payload.token}`;
-
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        eventId: payload.eventId,
-        eventTitle: payload.eventTitle,
-        recipientEmail: payload.recipientEmail,
-        token: payload.token,
-        inviteUrl,
-        kind: 'event-invitation',
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`n8n webhook returned ${response.status}`);
-    }
-  } catch (error) {
-    logger.error('Failed to dispatch private event invitation via n8n', {
-      eventId: payload.eventId,
-      email: payload.recipientEmail,
-      token: payload.token,
-      error,
-    });
-    throw error;
-  }
-}
+// Previously invitations were dispatched via n8n email webhook. For in-app
+// invitations we now create a system notification (persisted + websocket
+// emit) targeted to the recipient user when the recipient exists in the
+// system. We keep the old n8n function in comments for traceability but do
+// not call it by default per product request (no email delivery).
 
 export async function createEventInvitation(eventId: string, organizerId: string, email: string) {
   const event = await prisma.event.findUnique({
@@ -92,23 +56,63 @@ export async function createEventInvitation(eventId: string, organizerId: string
     },
   });
 
+  // Try to find a registered user by email to deliver an in-app notification
   try {
-    await triggerN8nInvite({
-      eventId,
-      eventTitle: event.title,
-      recipientEmail,
-      token,
-    });
-  } catch (error) {
-    logger.warn('Invitation created but n8n delivery failed; keeping token pending for traceability', {
-      invitationId: invitation.id,
-      eventId,
-      email: recipientEmail,
-      error,
-    });
+    const recipient = await prisma.user.findUnique({ where: { email: recipientEmail }, select: { id: true, name: true } });
+    if (recipient) {
+      await notificationService.createSystemNotification({
+        userId: recipient.id,
+        type: 'EVENT_INVITATION',
+        message: `Has sido invitado al evento ${event.title}`,
+        metadata: {
+          eventId,
+          invitationId: invitation.id,
+          token,
+          acceptEndpoint: `/events/invitations/accept/${token}`,
+          rejectEndpoint: `/events/invitations/reject/${token}`,
+          accion: { label: 'Ver Invitación', endpoint: `/events/invitations/accept/${token}` },
+        },
+      });
+    } else {
+      logger.info('Invitado no registrado en el sistema — no se enviará notificación in-app', { eventId, email: recipientEmail });
+    }
+  } catch (err) {
+    logger.error('Fallo al crear notificación in-app para invitación', { error: err, eventId, email: recipientEmail });
   }
 
   return { ...invitation, duplicate: false };
+}
+
+export async function rejectEventInvitation(token: string, userId: string) {
+  const invitation = await prisma.eventInvitation.findUnique({ where: { token } });
+  if (!invitation) throw new AppError(404, 'Invitación no encontrada o inválida');
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true } });
+  if (!user) throw new AppError(401, 'Usuario no encontrado');
+  if (invitation.email.toLowerCase() !== user.email.toLowerCase()) throw new AppError(403, 'Esta invitación no está asociada a tu correo institucional');
+
+  if (invitation.status === 'consumed' || invitation.status === 'rejected' || new Date(invitation.expiresAt) < new Date()) {
+    throw new AppError(410, 'Esta invitación ya no es válida');
+  }
+
+  await prisma.eventInvitation.update({ where: { id: invitation.id }, data: { status: 'rejected', consumedAt: new Date() } });
+
+  // Notify organizer that the invite was rejected
+  try {
+    const event = await prisma.event.findUnique({ where: { id: invitation.eventId }, select: { organizerId: true, title: true } });
+    if (event && event.organizerId) {
+      await notificationService.createSystemNotification({
+        userId: event.organizerId,
+        type: 'INVITATION_REJECTED',
+        message: `${user.name || user.email} rechazó la invitación al evento ${event.title}`,
+        metadata: { eventId: invitation.eventId, invitationId: invitation.id },
+      });
+    }
+  } catch (err) {
+    logger.warn('No se pudo notificar al organizador sobre la invitación rechazada', { error: err, invitationId: invitation.id });
+  }
+
+  return { message: 'Invitación rechazada' };
 }
 
 export async function listEventInvitations(eventId: string, organizerId: string) {

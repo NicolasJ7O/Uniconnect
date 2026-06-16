@@ -91,6 +91,10 @@ export async function createSystemNotification(input: {
   });
 
   const decorated = decorateNotification(notification);
-  emitToUser(input.userId, 'new-notification', decorated);
+  // Emit the decorated notification but also flatten metadata onto the
+  // payload so consumers can route easily (legacy observers used to emit
+  // `{...notif, ...metadata}`).
+  const payload = { ...decorated, ...(notification.metadata ?? {}) };
+  emitToUser(input.userId, 'new-notification', payload);
   return decorated;
 }

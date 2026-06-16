@@ -199,6 +199,12 @@ export async function registerAttendance(eventId: string, userId: string) {
         const event = await tx.event.findUnique({ where: { id: eventId } });
         if (!event) throw new AppError(404, 'Evento no encontrado');
 
+        // If the event is private, only allow the organizer to register attendance via this endpoint.
+        // Private event attendees must accept an invitation (consume invitation) which will create the attendance record.
+        if (event.isPrivate && event.organizerId !== userId) {
+            throw new AppError(403, 'Evento privado — la asistencia solo puede confirmarse mediante invitación');
+        }
+
         const existing = await tx.eventAttendance.findUnique({
             where: { eventId_userId: { eventId, userId } },
         });

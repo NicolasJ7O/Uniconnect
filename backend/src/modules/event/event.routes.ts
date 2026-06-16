@@ -15,6 +15,7 @@ import {
     createEventInvitationHandler,
     listEventInvitationsHandler,
     acceptEventInvitationHandler,
+    rejectEventInvitationHandler,
 } from './event-invitation.controller.js';
 import { requireAuth } from '../auth/auth.middleware.js';
 
@@ -37,5 +38,6 @@ eventRouter.delete('/subscribe/:category', unsubscribeHandler);
 eventRouter.delete('/suscribir', unsubscribeHandler);
 eventRouter.delete('/suscribir/:category', unsubscribeHandler);
 eventRouter.post('/invitations/accept/:token', acceptEventInvitationHandler);
+eventRouter.post('/invitations/reject/:token', rejectEventInvitationHandler);
 eventRouter.get('/:id', getEventByIdHandler);
 eventRouter.delete('/:id', deleteEventHandler);

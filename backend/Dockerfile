@@ -51,5 +51,5 @@ RUN mkdir -p uploads && chown -R node:node uploads
 # Cambiar a usuario no root para mayor seguridad (buena práctica en Alpine)
 USER node
 
-# Aplicar migraciones pendientes y luego iniciar la aplicación
-ENTRYPOINT ["sh", "-c", "prisma migrate resolve --rolled-back 20260615000000_add_assistant_feedback || true; prisma migrate deploy && exec npm start"]
+# Iniciar la aplicación directamente sin forzar migraciones para evitar crash loops
+ENTRYPOINT ["sh", "-c", "exec npm start"]

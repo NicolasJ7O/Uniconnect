@@ -28,6 +28,7 @@ const MAPPING = {
   'book.fill': 'menu-book',
   'person.crop.circle': 'account-circle',
   'person.fill': 'person',
+  'chevron.down': 'expand-more',
 } as any;
 
 /**

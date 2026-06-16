@@ -10,6 +10,7 @@ export type NavItem = {
   route?: string;
   adminOnly?: boolean;
   action?: () => void;
+  children?: NavItem[];
 };
 
 type NavContextType = {
@@ -24,8 +25,13 @@ type NavContextType = {
 
 const NavContext = createContext<NavContextType | undefined>(undefined);
 
+import { chatApi, type Conversation } from '@/lib/chat-api';
+import { getStudentProfile } from '@/lib/student-api';
+
 export const NavProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [privateChats, setPrivateChats] = useState<Conversation[]>([]);
+  const [subjects, setSubjects] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       if (Platform.OS === 'web') return localStorage.getItem('nav.collapsed') === 'true';
@@ -38,7 +44,20 @@ export const NavProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     (async () => {
       const session = await loadSession();
-      if (session) setUser(session.user);
+      if (session) {
+        setUser(session.user);
+        try {
+          // Fetch dynamic data for submenus
+          const [chats, profile] = await Promise.all([
+            chatApi.getConversations(),
+            getStudentProfile()
+          ]);
+          setPrivateChats(chats);
+          setSubjects(profile.subjects.map(s => s.name));
+        } catch (e) {
+          console.error('Error fetching submenu data', e);
+        }
+      }
     })();
     // sync collapsed across tabs
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -65,10 +84,44 @@ export const NavProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     { key: 'dashboard', label: 'Dashboard', icon: 'house.fill', route: '/dashboard' },
     { key: 'chatbot', label: 'Chatbot UniConnect', icon: 'sparkles', route: '/assistant' },
     { key: 'study-groups', label: 'Grupos de estudio', icon: 'person.3.fill', route: '/study-groups' },
-    { key: 'private-messages', label: 'Mensajes privados', icon: 'envelope.fill', route: '/private-chat' },
+    { 
+      key: 'private-messages', 
+      label: 'Mensajes privados', 
+      icon: 'envelope.fill', 
+      route: '/private-chat',
+      children: privateChats.map(chat => ({
+        key: `chat-${chat.user.id}`,
+        label: chat.user.name,
+        icon: 'person.crop.circle',
+        route: `/private-chat?id=${chat.user.id}&name=${encodeURIComponent(chat.user.name)}`
+      }))
+    },
     { key: 'events', label: 'Eventos universitarios', icon: 'calendar', route: '/events' },
     { key: 'study-sessions', label: 'Sesiones de estudio', icon: 'clock.fill', route: '/study-sessions' },
-    { key: 'library', label: 'Biblioteca', icon: 'book.fill', route: '/subject-library' },
+    { 
+      key: 'library', 
+      label: 'Biblioteca', 
+      icon: 'book.fill', 
+      route: '/subject-library',
+      children: subjects.map(sub => ({
+        key: `lib-${sub}`,
+        label: sub,
+        icon: 'book.fill',
+        route: `/subject-library?subject=${encodeURIComponent(sub)}`
+      }))
+    },
+    { 
+      key: 'forum', 
+      label: 'Foro', 
+      icon: 'bubble.left.and.bubble.right.fill', 
+      route: '/subject-forum',
+      children: subjects.map(sub => ({
+        key: `forum-${sub}`,
+        label: sub,
+        icon: 'bubble.left.and.bubble.right.fill',
+        route: `/subject-forum?subject=${encodeURIComponent(sub)}`
+      }))
+    },
     { key: 'profiles', label: 'Explorador de perfiles', icon: 'person.crop.circle', route: '/student-search' },
     { key: 'profile', label: 'Perfil del estudiante', icon: 'person.fill', route: '/profile-edit' },
   ];

@@ -82,24 +82,33 @@ export default function RootLayout() {
         <NotificationProvider>
           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
             <NavProvider>
-              <GlobalNav />
-              <Stack
-                screenOptions={{
-                  headerStyle: { backgroundColor: '#003e70' },
-                  headerTintColor: '#fff',
-                  headerTitleStyle: { fontWeight: 'bold' },
-                  headerLeft: () => <HeaderLeft />,
-                  headerRight: () => <HeaderRight />,
-                }}
-              >
-              <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="signup" options={{ title: 'Sign Up' }} />
-              <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="profile-edit" options={{ title: 'Editar Perfil' }} />
-              <Stack.Screen name="events" options={{ title: 'Eventos Universitarios' }} />
-              <Stack.Screen name="study-sessions" options={{ title: 'Sesiones de Estudio' }} />
-              </Stack>
+              <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column' }}>
+                <GlobalNav />
+                <View style={{ flex: 1, overflow: 'hidden' }}>
+                  <Stack
+                    screenOptions={{
+                      headerStyle: { backgroundColor: '#003e70', height: 60 },
+                      headerTintColor: '#fff',
+                      headerTitleStyle: { fontWeight: 'bold' },
+                      headerLeft: () => <HeaderLeft />,
+                      headerRight: () => <HeaderRight />,
+                    }}
+                  >
+                  <Stack.Screen name="index" options={{ headerShown: false }} />
+                  <Stack.Screen name="signup" options={{ title: 'Sign Up' }} />
+                  <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="profile-edit" options={{ title: 'Editar Perfil' }} />
+                  <Stack.Screen name="events" options={{ title: 'Eventos Universitarios' }} />
+                  <Stack.Screen name="study-sessions" options={{ title: 'Sesiones de Estudio' }} />
+                  <Stack.Screen name="assistant" options={{ title: 'Chatbot UniConnect' }} />
+                  <Stack.Screen name="subject-forum" options={{ title: 'Foro de Materia' }} />
+                  <Stack.Screen name="subject-library" options={{ title: 'Biblioteca' }} />
+                  <Stack.Screen name="private-chat" options={{ title: 'Mensajes Privados' }} />
+                  <Stack.Screen name="student-search" options={{ title: 'Explorador de perfiles' }} />
+                  </Stack>
+                </View>
+              </View>
             </NavProvider>
             <StatusBar style="auto" />
             <NotificationModal />

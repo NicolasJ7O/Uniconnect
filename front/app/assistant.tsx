@@ -16,7 +16,11 @@ export default function AssistantPage() {
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Chatbot UniConnect</Text>
-      <AssistantWidget session={session} roleLabel={session?.user?.role ?? 'user'} />
+      {session ? (
+        <AssistantWidget session={session} roleLabel={session?.user?.role ?? 'user'} />
+      ) : (
+        <Text>Cargando sesión...</Text>
+      )}
     </View>
   );
 }

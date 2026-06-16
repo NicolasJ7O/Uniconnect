@@ -14,10 +14,15 @@ export default function GlobalNav() {
 
   return (
     <>
-      <MobileMenu />
+      {isDesktop && (
+        <View style={styles.sidebarWrapper}>
+          <Sidebar />
+        </View>
+      )}
 
       {!isDesktop && (
         <>
+          <MobileMenu />
           <View style={styles.bottomNav} pointerEvents="box-none">
             <Pressable style={styles.navBtn} onPress={() => router.push('/dashboard')}>
               {/* @ts-ignore */}

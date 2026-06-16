@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { router } from 'expo-router';
-import { getStudentProfile, updateStudentProfile, type StudentProfile } from '@/lib/student-api';
+import { getStudentProfile, updateStudentProfile, getEnrichedStudentProfile, type StudentProfile } from '@/lib/student-api';
 
 const CARRERAS = [
     "Administración de empresas agropecuarias",
@@ -129,7 +129,7 @@ const normalize = (str: string) =>
 
 export default function ProfileEditScreen() {
     const { showToast } = useToast();
-    const [profile, setProfile] = useState<StudentProfile | null>(null);
+    const [profile, setProfile] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -194,6 +194,12 @@ export default function ProfileEditScreen() {
                 setCareer(data.career || '');
                 setCurrentSemester(data.currentSemester ? data.currentSemester.toString() : '');
                 setSubjects(data.subjects.map((sub) => sub.name));
+
+                try {
+                    const enriched = await getEnrichedStudentProfile(data.id);
+                    setProfile((prev: any) => ({ ...prev, insignias: enriched.insignias, stats: enriched.stats }));
+                } catch(e) { console.log('No se pudo cargar detalles enriquecidos', e) }
+
             } catch (error) {
                 console.error('Failed to load profile', error);
             } finally {
@@ -288,6 +294,44 @@ export default function ProfileEditScreen() {
                 }}
             >
                 <Text style={styles.title}>Editar Perfil</Text>
+
+                {/* Insignias y Stats */}
+                {profile?.insignias && profile.insignias.length > 0 && (
+                  <View style={{ marginBottom: 24 }}>
+                    <Text style={styles.label}>Tus Insignias</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {profile.insignias.map((badge: string, idx: number) => {
+                        const emoji = badge === 'Fundador' ? '🏗️' : badge === 'Colaborador Estrella' ? '⭐' : badge === 'Gran Comunicador' ? '🗣️' : '🎓';
+                        return (
+                          <View key={idx} style={{ backgroundColor: '#f1f5f9', padding: 10, borderRadius: 12, width: 110, alignItems: 'center' }}>
+                            <View style={{ backgroundColor: '#fff', padding: 6, borderRadius: 10, marginBottom: 6 }}><Text>{emoji}</Text></View>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#0f172a', textAlign: 'center' }}>{badge}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                {profile?.stats && (
+                  <View style={{ marginBottom: 24 }}>
+                    <Text style={styles.label}>Estadísticas</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                      <View style={{ flex: 1, backgroundColor: '#f8fafc', padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' }}>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a' }}>{profile.stats.gruposCreados ?? 0}</Text>
+                        <Text style={{ fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center' }}>Grupos creados</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#f8fafc', padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' }}>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a' }}>{profile.stats.gruposParticipa ?? 0}</Text>
+                        <Text style={{ fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center' }}>Grupos miembro</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#f8fafc', padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' }}>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a' }}>{profile.stats.mensajesEnviados ?? 0}</Text>
+                        <Text style={{ fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center' }}>Mensajes chat</Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
 
                 {/* Campo Carrera — el ref se pone en el wrapper para medir su posición */}
                 <View ref={careerInputRef} collapsable={false}>

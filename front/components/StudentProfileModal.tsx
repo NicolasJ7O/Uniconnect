@@ -79,41 +79,39 @@ export default function StudentProfileModal({ visible, onClose, userId }: { visi
                 </View>
               )}
 
-              {Array.isArray(profile.badges) && profile.badges.length > 0 && (
+              {Array.isArray(profile.insignias) && profile.insignias.length > 0 && (
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Insignias y logros</Text>
                   <View style={styles.badgeRow}>
-                    {profile.badges.map((b: any) => (
-                      <View key={b.id || b.label} style={styles.badgeCard}>
-                        <View style={styles.badgeIcon}><Ionicons name={b.icon || 'sparkles'} size={20} color={Colors.light.tint} /></View>
-                        <Text style={styles.badgeLabel}>{b.label}</Text>
-                        {b.count != null && <Text style={styles.badgeCount}>{b.count}</Text>}
-                      </View>
-                    ))}
+                    {profile.insignias.map((badge: string, idx: number) => {
+                      const emoji = badge === 'Fundador' ? '🏗️' : badge === 'Colaborador Estrella' ? '⭐' : badge === 'Gran Comunicador' ? '🗣️' : '🎓';
+                      return (
+                        <View key={idx} style={styles.badgeCard}>
+                          <View style={styles.badgeIcon}><Text>{emoji}</Text></View>
+                          <Text style={styles.badgeLabel}>{badge}</Text>
+                        </View>
+                      );
+                    })}
                   </View>
                 </View>
               )}
 
               {/* Activity stats */}
-              {profile.activityStats && (
+              {profile.stats && (
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Estadísticas de actividad</Text>
                   <View style={styles.statsRow}>
                     <View style={styles.statCard}>
-                      <Text style={styles.statNumber}>{profile.activityStats.posts ?? 0}</Text>
-                      <Text style={styles.statLabel}>Publicaciones</Text>
+                      <Text style={styles.statNumber}>{profile.stats.gruposCreados ?? 0}</Text>
+                      <Text style={styles.statLabel}>Grupos creados</Text>
                     </View>
                     <View style={styles.statCard}>
-                      <Text style={styles.statNumber}>{profile.activityStats.comments ?? 0}</Text>
-                      <Text style={styles.statLabel}>Comentarios</Text>
+                      <Text style={styles.statNumber}>{profile.stats.gruposParticipa ?? 0}</Text>
+                      <Text style={styles.statLabel}>Grupos miembro</Text>
                     </View>
                     <View style={styles.statCard}>
-                      <Text style={styles.statNumber}>{profile.activityStats.eventsAttended ?? 0}</Text>
-                      <Text style={styles.statLabel}>Eventos</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                      <Text style={styles.statNumber}>{profile.activityStats.pollsCreated ?? 0}</Text>
-                      <Text style={styles.statLabel}>Encuestas</Text>
+                      <Text style={styles.statNumber}>{profile.stats.mensajesEnviados ?? 0}</Text>
+                      <Text style={styles.statLabel}>Mensajes chat</Text>
                     </View>
                   </View>
                 </View>

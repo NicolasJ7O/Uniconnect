@@ -8,7 +8,7 @@ export default function HeaderLeft() {
   const { openMobile } = useNav();
 
   // show hamburger on small screens or mobile
-  if (Platform.OS === 'web' && width > 900) return null;
+  // if (Platform.OS === 'web' && width > 900) return null;
 
   return (
     <Pressable onPress={openMobile} style={{ paddingHorizontal: 12 }}>

@@ -160,9 +160,17 @@ export async function createEvent(organizerId: string, data: CreateEventInput) {
         organizerName: organizer?.name || organizer?.email || 'Un estudiante',
     });
 
+    const formattedEvent = {
+        ...event,
+        attendanceCount: 0,
+        isFull: false,
+        isAttending: false,
+        attendees: [],
+    };
+
     // Broadcast the new event globally to all connected clients
     try {
-        getIO().emit('new-event', event);
+        getIO().emit('new-event', formattedEvent);
     } catch (e) {
         console.error('Error broadcasting new-event:', e);
     }

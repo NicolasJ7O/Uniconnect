@@ -10,7 +10,7 @@ import {
   TextInput,
   RefreshControl,
   Platform,
-  
+  Image,
 } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { eventApi, type UniversityEvent } from '@/lib/event-api';
@@ -661,7 +661,6 @@ export default function EventsScreen() {
                 setInviteSearchLoading(true);
                 try {
                   const res = await searchStudents(text.trim());
-                  // `searchStudents` now returns { results, total }
                   setInviteSearchResults((res && (res as any).results) || []);
                 } catch (e) {
                   console.error('Error searching students', e);
@@ -730,9 +729,28 @@ export default function EventsScreen() {
                 <View style={{ marginTop: 12 }}>
                   <Text style={{ marginBottom: 8, color: '#374151' }}>Muestra este QR en la entrada</Text>
                   <View style={{ backgroundColor: '#fff', padding: 8, borderRadius: 12 }}>
-                    <img src={qrImage} alt="QR" style={{ width: 280, height: 280 }} />
+                    {Platform.OS === 'web' ? (
+                      <img src={qrImage} alt="QR" style={{ width: 280, height: 280, objectFit: 'contain' }} />
+                    ) : (
+                      <Image source={{ uri: qrImage }} style={{ width: 280, height: 280 }} />
+                    )}
                   </View>
                 </View>
+                {Platform.OS === 'web' && (
+                  <Pressable 
+                    style={[styles.btn, { backgroundColor: '#0ea5e9', marginTop: 16 }]}
+                    onPress={() => {
+                      const link = document.createElement('a');
+                      link.href = qrImage;
+                      link.download = 'uniconnect_qr.png';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Descargar QR</Text>
+                  </Pressable>
+                )}
               </ScrollView>
             ) : (
               <Text>Cargando...</Text>

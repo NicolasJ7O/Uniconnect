@@ -106,6 +106,13 @@ export default function RootLayout() {
                   <Stack.Screen name="subject-library" options={{ title: 'Biblioteca' }} />
                   <Stack.Screen name="private-chat" options={{ title: 'Mensajes Privados' }} />
                   <Stack.Screen name="student-search" options={{ title: 'Explorador de perfiles' }} />
+                  <Stack.Screen name="verify-qr" options={{ title: 'Verificar Pase QR' }} />
+                  <Stack.Screen name="study-groups" options={{ title: 'Grupos de Estudio' }} />
+                  <Stack.Screen name="study-group-chat" options={{ title: 'Chat del Grupo' }} />
+                  <Stack.Screen name="study-group-wall" options={{ title: 'Muro del Grupo' }} />
+                  <Stack.Screen name="library-resource" options={{ title: 'Recurso Biblioteca' }} />
+                  <Stack.Screen name="forum-history" options={{ title: 'Historial del Foro' }} />
+                  <Stack.Screen name="forum-question" options={{ title: 'Pregunta del Foro' }} />
                   </Stack>
                 </View>
               </View>

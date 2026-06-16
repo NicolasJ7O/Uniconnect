@@ -52,4 +52,4 @@ RUN mkdir -p uploads && chown -R node:node uploads
 USER node
 
 # Aplicar migraciones pendientes y luego iniciar la aplicación
-ENTRYPOINT ["sh", "-c", "prisma migrate deploy && exec npm start"]
+ENTRYPOINT ["sh", "-c", "prisma migrate resolve --rolled-back 20260615000000_add_assistant_feedback || true; prisma migrate deploy && exec npm start"]

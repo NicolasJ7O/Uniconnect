@@ -10,6 +10,7 @@ import {
   TextInput,
   RefreshControl,
   Platform,
+  Image,
 } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { eventApi, type UniversityEvent } from '@/lib/event-api';
@@ -42,6 +43,12 @@ export default function EventsScreen() {
   const [eventDate, setEventDate] = useState('');
   const [location, setLocation] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPrivateEvent, setIsPrivateEvent] = useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [selectedEventForInvite, setSelectedEventForInvite] = useState<null | UniversityEvent>(null);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrImage, setQrImage] = useState<string | null>(null);
 
   const { showToast } = useToast();
   const { socket } = useNotifications();
@@ -185,6 +192,7 @@ export default function EventsScreen() {
         category,
         eventDate: parsedDate,
         location: location.trim() || undefined,
+        isPrivate: isPrivateEvent,
       });
       showToast('¡Evento publicado con éxito!', 'success');
       setIsModalOpen(false);
@@ -194,6 +202,7 @@ export default function EventsScreen() {
       setCategory('ACADEMICO');
       setEventDate('');
       setLocation('');
+      setIsPrivateEvent(false);
       // Reload events list
       void loadData(true);
     } catch (e) {
@@ -307,7 +316,7 @@ export default function EventsScreen() {
                   ]}
                   onPress={() => toggleCategory(cat)}
                 >
-                  <Text style={[styles.categoryChipText, isSelected && styles.categoryChipTextActive]}>
+                  <Text numberOfLines={1} style={[styles.categoryChipText, isSelected && styles.categoryChipTextActive]}>
                     {cat}
                   </Text>
                 </Pressable>
@@ -414,6 +423,17 @@ export default function EventsScreen() {
                 </View>
 
                 <Text style={styles.eventTitle}>{item.title}</Text>
+                  {item.ogImage && (
+                    <View style={styles.ogImageWrap}>
+                      {Platform.OS === 'web' ? (
+                        // web can use img for data URLs
+                        <img src={item.ogImage} alt="og" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 8 }} />
+                      ) : (
+                        // native Image
+                        <Image source={{ uri: item.ogImage }} style={styles.ogImage} />
+                      )}
+                    </View>
+                  )}
                 <Text style={styles.eventDescription}>{item.description}</Text>
 
                 <View style={styles.eventMetaRow}>
@@ -455,6 +475,33 @@ export default function EventsScreen() {
                     {item.isFull && !item.isAttending ? 'Cupo agotado' : item.isAttending ? 'Cancelar asistencia' : 'Voy a asistir'}
                   </Text>
                 </Pressable>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  {isOrganizer && (
+                    <Pressable
+                      style={[styles.smallBtn, { backgroundColor: '#06b6d4' }]}
+                      onPress={() => { setSelectedEventForInvite(item); setInviteModalOpen(true); }}
+                    >
+                      <Text style={styles.smallBtnText}>Invitar</Text>
+                    </Pressable>
+                  )}
+                  {item.isAttending && (
+                    <Pressable
+                      style={[styles.smallBtn, { backgroundColor: '#0ea5a3' }]}
+                      onPress={async () => {
+                        try {
+                          const res = await eventApi.generateQr(item.id);
+                          setQrImage(res.qrPng);
+                          setQrModalOpen(true);
+                        } catch (e) {
+                          console.error('Error generating QR', e);
+                          showToast('No se pudo generar el QR', 'error');
+                        }
+                      }}
+                    >
+                      <Text style={styles.smallBtnText}>Generar QR</Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
             );
           })
@@ -553,6 +600,16 @@ export default function EventsScreen() {
                 onChangeText={setLocation}
               />
 
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
+                <Text style={{ flex: 1, fontWeight: '700', color: '#334155' }}>Evento privado</Text>
+                <Pressable
+                  onPress={() => setIsPrivateEvent((v) => !v)}
+                  style={{ width: 52, height: 32, borderRadius: 20, backgroundColor: isPrivateEvent ? '#0a7ea4' : '#e2e8f0', justifyContent: 'center', padding: 4 }}
+                >
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', marginLeft: isPrivateEvent ? 24 : 4 }} />
+                </Pressable>
+              </View>
+
               <View style={styles.modalActions}>
                 <Pressable
                   style={[styles.btn, styles.cancelBtn]}
@@ -572,6 +629,72 @@ export default function EventsScreen() {
                 </Pressable>
               </View>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Invite Modal */}
+      <Modal visible={inviteModalOpen} animationType="slide" transparent onRequestClose={() => setInviteModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Invitar a evento</Text>
+            <Text style={{ marginTop: 6 }}>{selectedEventForInvite?.title}</Text>
+            <TextInput
+              style={[styles.input, { marginTop: 12 }]}
+              placeholder="Correo del invitado"
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <View style={styles.modalActions}>
+              <Pressable style={[styles.btn, styles.cancelBtn]} onPress={() => setInviteModalOpen(false)}>
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.btn, styles.submitBtn]}
+                onPress={async () => {
+                  if (!selectedEventForInvite) return;
+                  try {
+                    await eventApi.createInvitation(selectedEventForInvite.id, inviteEmail.trim());
+                    showToast('Invitación enviada', 'success');
+                    setInviteModalOpen(false);
+                    setInviteEmail('');
+                  } catch (e) {
+                    console.error('Error sending invitation', e);
+                    showToast('No se pudo enviar la invitación', 'error');
+                  }
+                }}
+              >
+                <Text style={styles.submitBtnText}>Enviar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* QR Modal */}
+      <Modal visible={qrModalOpen} animationType="slide" transparent onRequestClose={() => setQrModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Pase QR</Text>
+            {qrImage ? (
+              <ScrollView contentContainerStyle={{ alignItems: 'center' }}>
+                <View style={{ marginTop: 12 }}>
+                  <Text style={{ marginBottom: 8, color: '#374151' }}>Muestra este QR en la entrada</Text>
+                  <View style={{ backgroundColor: '#fff', padding: 8, borderRadius: 12 }}>
+                    <img src={qrImage} alt="QR" style={{ width: 280, height: 280 }} />
+                  </View>
+                </View>
+              </ScrollView>
+            ) : (
+              <Text>Cargando...</Text>
+            )}
+            <View style={[styles.modalActions, { marginTop: 12 }]}> 
+              <Pressable style={[styles.btn, styles.cancelBtn]} onPress={() => setQrModalOpen(false)}>
+                <Text style={styles.cancelBtnText}>Cerrar</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -610,24 +733,26 @@ const styles = StyleSheet.create({
   },
   categoriesScroll: {
     paddingHorizontal: 12,
-    gap: 12,
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   chipWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    paddingLeft: 4,
-    paddingRight: 6,
-    height: 38,
+    marginRight: 8,
   },
   categoryChip: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 999,
+    minWidth: 44,
+    maxWidth: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   categoryChipText: {
     fontSize: 12,
@@ -638,10 +763,10 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   subscribeBadge: {
-    marginLeft: 4,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    marginLeft: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -657,6 +782,21 @@ const styles = StyleSheet.create({
   eventsScroll: {
     flex: 1,
     paddingHorizontal: 16,
+  },
+
+  ogImageWrap: {
+    marginTop: 8,
+    marginBottom: 12,
+    width: '100%',
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#f8fafc',
+  },
+  ogImage: {
+    width: '100%',
+    height: 180,
+    resizeMode: 'cover',
+    borderRadius: 8,
   },
   filterPanel: {
     backgroundColor: '#ffffff',
@@ -801,6 +941,7 @@ const styles = StyleSheet.create({
         boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
       },
     }),
+    overflow: 'hidden',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -903,6 +1044,15 @@ const styles = StyleSheet.create({
   },
   attendanceButtonTextActive: {
     color: '#dc2626',
+  },
+  smallBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  smallBtnText: {
+    color: '#fff',
+    fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,

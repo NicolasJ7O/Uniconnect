@@ -39,6 +39,9 @@ export interface CreateEventInput {
   location?: string;
   category: string;
 }
+export interface CreateEventInputWithPrivacy extends CreateEventInput {
+  isPrivate?: boolean;
+}
 
 export const eventApi = {
   getEvents: async (params?: {
@@ -54,7 +57,7 @@ export const eventApi = {
     return res.data;
   },
 
-  createEvent: async (data: CreateEventInput): Promise<UniversityEvent> => {
+  createEvent: async (data: CreateEventInputWithPrivacy): Promise<UniversityEvent> => {
     const res = await apiClient.post('/events', data);
     return res.data;
   },
@@ -86,6 +89,20 @@ export const eventApi = {
 
   deleteEvent: async (id: string): Promise<void> => {
     const res = await apiClient.delete(`/events/${id}`);
+    return res.data;
+  },
+  createInvitation: async (eventId: string, email: string): Promise<any> => {
+    const res = await apiClient.post(`/events/${eventId}/invitations`, { email });
+    return res.data;
+  },
+
+  generateQr: async (eventId: string): Promise<{ qrPng: string; token: string; attendee: UserSummary; eventDate: string }> => {
+    const res = await apiClient.get(`/events/${eventId}/qr`);
+    return res.data;
+  },
+
+  verifyQr: async (token: string): Promise<any> => {
+    const res = await apiClient.post('/events/verify-qr', { token });
     return res.data;
   },
 };

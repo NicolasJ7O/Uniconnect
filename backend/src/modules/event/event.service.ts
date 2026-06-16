@@ -62,6 +62,11 @@ export async function getAllEvents(input: EventListFilters & { userId?: string }
     const offset = Math.max(0, Number(input.offset ?? 0));
     const where = buildEventWhere(input);
 
+    // Hide private events from unauthenticated/public callers
+    if (!input.userId) {
+        where.isPrivate = false;
+    }
+
     const items = await prisma.event.findMany({
         where,
         include: {

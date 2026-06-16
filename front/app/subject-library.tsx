@@ -581,7 +581,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#334155',
   },
-  filtersRow: { paddingHorizontal: 14, paddingBottom: 10, flexDirection: 'row', alignItems: 'center' },
+  filtersRow: { paddingHorizontal: 14, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', zIndex: 20, elevation: 6, borderBottomWidth: 1, borderBottomColor: '#e8eef2' },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -595,7 +595,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12, fontWeight: '600', color: '#64748b' },
   chipTextActive: { color: '#fff' },
   chipDivider: { width: 1, backgroundColor: '#e2e8f0', marginHorizontal: 6, height: 28 },
-  list: { padding: 14, paddingTop: 4, paddingBottom: 96 },
+  list: { padding: 14, paddingTop: 12, paddingBottom: 96 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 64, gap: 10 },
   loadingText: { color: '#64748b', fontSize: 14 },
   emptyText: { fontSize: 15, fontWeight: '600', color: '#64748b', textAlign: 'center' },
